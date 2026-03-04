@@ -1,0 +1,273 @@
+---
+title: Data Analysis with FastF1
+description: Learn how to analyze F1 data using Pandas integration, filtering techniques, and driver comparisons
+---
+
+FastF1 provides powerful data analysis capabilities through seamless Pandas integration. This guide covers practical workflows for analyzing F1 session data, filtering laps, and comparing driver performance.
+
+## Working with Session Data
+
+Every F1 session provides comprehensive data through the `Session` object. Load a session to access lap times, telemetry, and results:
+
+```python
+import fastf1
+
+# Enable caching for faster subsequent loads
+fastf1.Cache.enable_cache('/path/to/cache')
+
+# Load a race session
+race = fastf1.get_session(2023, "Azerbaijan", 'R')
+race.load()
+
+# Access session data
+print(race.laps)  # All laps from the session
+print(race.results)  # Final results
+print(race.drivers)  # List of driver numbers
+```
+
+## Pandas Integration
+
+FastF1 returns data as Pandas DataFrames and Series, giving you the full power of Pandas for data manipulation:
+
+```python
+import pandas as pd
+
+# Session laps are returned as a DataFrame
+laps = race.laps
+print(type(laps))  # <class 'fastf1.core.Laps'> (extends DataFrame)
+
+# Use standard Pandas operations
+laps.head()  # First 5 laps
+laps.describe()  # Statistical summary
+laps['LapTime'].mean()  # Average lap time
+
+# Filter using Pandas boolean indexing
+fast_laps = laps[laps['LapTime'] < pd.Timedelta(seconds=90)]
+
+# Group by driver and calculate statistics
+driver_stats = laps.groupby('Driver').agg({
+    'LapTime': ['mean', 'min', 'max'],
+    'Speed': 'mean'
+})
+```
+
+## Filtering Data
+
+FastF1 provides specialized methods for common filtering operations:
+
+### Filtering by Driver
+
+```python
+# Get all laps for a single driver
+hamiltonian_laps = race.laps.pick_drivers('HAM')
+
+# Multiple drivers
+merc_laps = race.laps.pick_drivers(['HAM', 'RUS'])
+
+# Get fastest lap for a driver
+ver_fastest = race.laps.pick_drivers('VER').pick_fastest()
+```
+
+### Filtering by Lap Quality
+
+```python
+# Pick only quick laps (within 107% of fastest lap)
+quick_laps = race.laps.pick_quicklaps()
+
+# Filter out in/out laps and slow laps
+race_pace = race.laps.pick_quicklaps().reset_index()
+
+# Get accurate laps (no track limits violations, no yellow flags)
+accurate_laps = laps[laps['IsAccurate'] == True]
+```
+
+### Filtering by Tire Compound
+
+```python
+# Get all laps on soft tires
+soft_tire_laps = race.laps[race.laps['Compound'] == 'SOFT']
+
+# Group by tire compound
+by_compound = race.laps.groupby('Compound')['LapTime'].mean()
+```
+
+## Comparing Drivers
+
+Analyze and compare driver performance using filtering and aggregation:
+
+### Lap Time Comparison
+
+```python
+import matplotlib.pyplot as plt
+import fastf1.plotting
+
+fastf1.plotting.setup_mpl(mpl_timedelta_support=True, color_scheme='fastf1')
+
+# Compare lap times for multiple drivers
+fig, ax = plt.subplots(figsize=(10, 6))
+
+for driver in ('HAM', 'VER', 'PER', 'RUS'):
+    driver_laps = race.laps.pick_drivers(driver).pick_quicklaps()
+    driver_laps = driver_laps.reset_index()
+    
+    style = fastf1.plotting.get_driver_style(
+        identifier=driver,
+        style=['color', 'linestyle'],
+        session=race
+    )
+    
+    ax.plot(driver_laps['LapNumber'], driver_laps['LapTime'], 
+            **style, label=driver)
+
+ax.set_xlabel('Lap Number')
+ax.set_ylabel('Lap Time')
+ax.legend()
+plt.show()
+```
+
+### Race Pace Analysis
+
+```python
+# Calculate average race pace for each driver
+race_pace = race.laps.pick_quicklaps().groupby('Driver').agg({
+    'LapTime': 'mean'
+}).sort_values('LapTime')
+
+print("Average Race Pace (Quick Laps Only):")
+print(race_pace)
+```
+
+### Qualifying Performance
+
+```python
+quali = fastf1.get_session(2023, "Azerbaijan", 'Q')
+quali.load()
+
+# Get fastest lap for each driver in Q3
+q3_results = []
+for driver in quali.drivers:
+    try:
+        fastest = quali.laps.pick_drivers(driver).pick_fastest()
+        q3_results.append({
+            'Driver': driver,
+            'LapTime': fastest['LapTime'],
+            'Team': fastest['Team']
+        })
+    except:
+        pass  # Driver didn't set a lap
+
+q3_df = pd.DataFrame(q3_results).sort_values('LapTime')
+```
+
+### Telemetry Comparison
+
+```python
+# Compare speed traces for two drivers
+ver_lap = quali.laps.pick_drivers('VER').pick_fastest()
+ham_lap = quali.laps.pick_drivers('HAM').pick_fastest()
+
+# Get telemetry data
+ver_tel = ver_lap.get_car_data().add_distance()
+ham_tel = ham_lap.get_car_data().add_distance()
+
+# Plot speed comparison
+fig, ax = plt.subplots()
+ax.plot(ver_tel['Distance'], ver_tel['Speed'], label='VER')
+ax.plot(ham_tel['Distance'], ham_tel['Speed'], label='HAM')
+ax.set_xlabel('Distance (m)')
+ax.set_ylabel('Speed (km/h)')
+ax.legend()
+plt.show()
+```
+
+## Advanced Data Analysis
+
+### Stint Analysis
+
+```python
+# Analyze stint performance
+driver_laps = race.laps.pick_drivers('ALO').pick_quicklaps()
+
+# Group by stint and calculate degradation
+stint_analysis = driver_laps.groupby('Stint').agg({
+    'LapTime': ['first', 'last', 'mean', 'count'],
+    'Compound': 'first'
+}).reset_index()
+
+print(stint_analysis)
+```
+
+### Tire Degradation
+
+```python
+# Calculate tire degradation per stint
+for stint in driver_laps['Stint'].unique():
+    stint_laps = driver_laps[driver_laps['Stint'] == stint]
+    
+    # Convert lap times to seconds for regression
+    lap_numbers = stint_laps['LapNumber'].values
+    lap_times = stint_laps['LapTime'].dt.total_seconds().values
+    
+    # Linear regression to estimate degradation
+    from numpy.polynomial import Polynomial
+    p = Polynomial.fit(lap_numbers, lap_times, 1)
+    degradation_per_lap = p.convert().coef[1]
+    
+    print(f"Stint {stint}: {degradation_per_lap:.3f}s/lap degradation")
+```
+
+### Sector Time Analysis
+
+```python
+# Compare sector times
+driver_laps = quali.laps.pick_drivers('VER')
+
+# Find best sectors
+best_sector_1 = driver_laps['Sector1Time'].min()
+best_sector_2 = driver_laps['Sector2Time'].min()
+best_sector_3 = driver_laps['Sector3Time'].min()
+
+print(f"Best S1: {best_sector_1}")
+print(f"Best S2: {best_sector_2}")
+print(f"Best S3: {best_sector_3}")
+
+# Theoretical best lap (sum of best sectors)
+theoretical_best = best_sector_1 + best_sector_2 + best_sector_3
+actual_best = driver_laps['LapTime'].min()
+print(f"Delta to theoretical best: {actual_best - theoretical_best}")
+```
+
+## Working with Time Data
+
+FastF1 uses Pandas timedelta for time values:
+
+```python
+# Lap times are timedelta objects
+lap_time = laps.iloc[0]['LapTime']
+print(type(lap_time))  # <class 'pandas._libs.tslibs.timedeltas.Timedelta'>
+
+# Convert to seconds for calculations
+lap_time_seconds = lap_time.total_seconds()
+
+# Create timedelta from seconds
+import pandas as pd
+threshold = pd.Timedelta(seconds=90)
+fast_laps = laps[laps['LapTime'] < threshold]
+
+# Format for display
+print(f"Lap time: {lap_time}")
+```
+
+## Best Practices
+
+1. **Enable caching** to avoid re-downloading data on every run
+2. **Use `pick_quicklaps()`** when analyzing race pace to filter out slow laps
+3. **Reset index** after filtering with `.reset_index()` for cleaner plots
+4. **Check for missing data** - not all laps have complete telemetry
+5. **Use timedelta support** in matplotlib with `setup_mpl(mpl_timedelta_support=True)`
+
+## Next Steps
+
+- Learn about [visualization techniques](/guides/visualization) for creating compelling charts
+- Explore [performance optimization](/guides/performance-optimization) for faster data analysis
+- Access [historical data](/guides/ergast-api) using the Ergast API integration

@@ -1,0 +1,274 @@
+---
+title: "Session API"
+description: "Reference for FastF1 Session class - load and access session data"
+---
+
+The Session class is the primary interface for accessing Formula 1 session data including lap times, telemetry, weather, and results.
+
+## Session
+
+Object for accessing session specific data.
+
+**Constructor:**
+
+<ParamField path="event" type="Event" required>
+  Reference to the associated Event object
+</ParamField>
+
+<ParamField path="session_name" type="str" required>
+  Name of this session (e.g., 'Qualifying', 'Race', 'FP1')
+</ParamField>
+
+<ParamField path="f1_api_support" type="bool" default="False">
+  Whether the official F1 API supports this event
+</ParamField>
+
+<Note>
+  Sessions are usually created using `fastf1.get_session()` rather than instantiating directly.
+</Note>
+
+---
+
+## Properties
+
+### event
+
+<ResponseField name="type" type="Event">
+  Reference to the associated Event object
+</ResponseField>
+
+### name
+
+<ResponseField name="type" type="str">
+  Name of this session (e.g., 'Qualifying', 'Race', 'FP1')
+</ResponseField>
+
+### date
+
+<ResponseField name="type" type="pd.Timestamp">
+  Date at which this session took place
+</ResponseField>
+
+### drivers
+
+<ResponseField name="type" type="list">
+  List of all driver numbers (as strings) that participated in this session. Available after calling `load()`.
+</ResponseField>
+
+### results
+
+<ResponseField name="type" type="SessionResults">
+  Session results with driver information. Available after calling `load()`.
+</ResponseField>
+
+### laps
+
+<ResponseField name="type" type="Laps">
+  All laps from all drivers in this session. Available after calling `load()` with `laps=True`.
+</ResponseField>
+
+### car_data
+
+<ResponseField name="type" type="dict">
+  Dictionary of car telemetry (Speed, RPM, etc.) keyed by driver number (string). Each value is a Telemetry object. Available after calling `load()` with `telemetry=True`.
+</ResponseField>
+
+### pos_data
+
+<ResponseField name="type" type="dict">
+  Dictionary of car position data (X, Y, Z coordinates) keyed by driver number (string). Each value is a Telemetry object. Available after calling `load()` with `telemetry=True`.
+</ResponseField>
+
+### weather_data
+
+<ResponseField name="type" type="pd.DataFrame">
+  DataFrame containing weather data for this session. Available after calling `load()` with `weather=True`.
+</ResponseField>
+
+### session_status
+
+<ResponseField name="type" type="pd.DataFrame">
+  Session status data (Started, Finished, Aborted). Available after calling `load()` with `laps=True`.
+</ResponseField>
+
+### track_status
+
+<ResponseField name="type" type="pd.DataFrame">
+  Track status data (yellow flags, red flags, etc.). Available after calling `load()` with `laps=True`.
+</ResponseField>
+
+### race_control_messages
+
+<ResponseField name="type" type="pd.DataFrame">
+  Race control messages for this session. Available after calling `load()` with `messages=True`.
+</ResponseField>
+
+### session_info
+
+<ResponseField name="type" type="dict">
+  Session information including meeting, session, country and circuit names and unique identifier keys.
+</ResponseField>
+
+### total_laps
+
+<ResponseField name="type" type="int | None">
+  Originally scheduled number of laps for race-like sessions. Available after calling `load()` with `laps=True`.
+</ResponseField>
+
+### t0_date
+
+<ResponseField name="type" type="pd.Timestamp">
+  Date timestamp marking the beginning of the data stream (when session time is zero). Available after calling `load()` with `telemetry=True`.
+</ResponseField>
+
+### session_start_time
+
+<ResponseField name="type" type="pd.Timedelta">
+  Session time at which the session was started. Available after calling `load()` with `laps=True`.
+</ResponseField>
+
+---
+
+## Methods
+
+### load()
+
+Load session data from the supported APIs.
+
+<ParamField path="laps" type="bool" default="True">
+  Load laps and session status data
+</ParamField>
+
+<ParamField path="telemetry" type="bool" default="True">
+  Load telemetry data (car_data and pos_data)
+</ParamField>
+
+<ParamField path="weather" type="bool" default="True">
+  Load weather data
+</ParamField>
+
+<ParamField path="messages" type="bool" default="True">
+  Load race control messages
+</ParamField>
+
+<ParamField path="livedata" type="LiveTimingData | None" default="None">
+  Optional locally saved livetiming data to use as data source instead of API
+</ParamField>
+
+<Note>
+  Without specifying any options, all data is loaded by default. Loading all data is recommended as FastF1 uses data from multiple sources to provide the most accurate results.
+</Note>
+
+**Example:**
+
+```python
+import fastf1
+
+# Load all data (default)
+session = fastf1.get_session(2023, 'Monaco', 'Race')
+session.load()
+
+# Load only specific data
+session = fastf1.get_session(2023, 'Monaco', 'Q')
+session.load(laps=True, telemetry=False, weather=False, messages=False)
+```
+
+---
+
+### get_driver()
+
+Get a DriverResult object containing information about a specific driver.
+
+<ParamField path="identifier" type="str" required>
+  Driver's three letter identifier (e.g., 'VER') or driver number as string
+</ParamField>
+
+<ResponseField name="return" type="DriverResult">
+  DriverResult object with driver information
+</ResponseField>
+
+**Example:**
+
+```python
+session = fastf1.get_session(2023, 'Monaco', 'Race')
+session.load()
+
+# Get driver by abbreviation
+ver = session.get_driver('VER')
+print(ver['FullName'])  # 'Max Verstappen'
+
+# Get driver by number
+ham = session.get_driver('44')
+print(ham['TeamName'])  # 'Mercedes'
+```
+
+---
+
+### get_circuit_info()
+
+Returns additional information about the circuit hosting this event.
+
+<ResponseField name="return" type="CircuitInfo | None">
+  CircuitInfo object with corner locations, marshal lights, marshal sectors, and track map rotation. Returns None if information is unavailable.
+</ResponseField>
+
+<Note>
+  The circuit information is manually created and not highly accurate, but it's useful for annotating data visualizations.
+</Note>
+
+**Example:**
+
+```python
+session = fastf1.get_session(2023, 'Monaco', 'Race')
+session.load()
+
+circuit_info = session.get_circuit_info()
+print(circuit_info.corners)
+```
+
+---
+
+## Complete Usage Example
+
+```python
+import fastf1
+import matplotlib.pyplot as plt
+
+# Get and load a session
+session = fastf1.get_session(2023, 'Monaco', 'Race')
+session.load()
+
+# Access session properties
+print(f"Session: {session.event.EventName} - {session.name}")
+print(f"Date: {session.date}")
+print(f"Drivers: {session.drivers}")
+
+# Access results
+results = session.results
+print(results[['Position', 'Abbreviation', 'TeamName']])
+
+# Access laps
+laps = session.laps
+fastest_lap = laps.pick_fastest()
+print(f"Fastest lap: {fastest_lap['LapTime']}")
+
+# Access telemetry
+ver_laps = laps.pick_drivers('VER')
+ver_fastest = ver_laps.pick_fastest()
+ver_tel = ver_fastest.get_telemetry()
+
+# Plot speed
+plt.plot(ver_tel['Distance'], ver_tel['Speed'])
+plt.xlabel('Distance (m)')
+plt.ylabel('Speed (km/h)')
+plt.title('Verstappen Fastest Lap - Speed Trace')
+plt.show()
+
+# Access weather data
+weather = session.weather_data
+print(weather[['Time', 'AirTemp', 'TrackTemp', 'Rainfall']])
+
+# Access race control messages
+messages = session.race_control_messages
+print(messages[['Time', 'Category', 'Message']])
+```

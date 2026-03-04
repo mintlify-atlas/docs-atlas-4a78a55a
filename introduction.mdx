@@ -1,0 +1,82 @@
+---
+title: Introduction
+description: FastF1 is a Python package for accessing and analyzing Formula 1 results, schedules, timing data and telemetry
+---
+
+FastF1 is a Python package that provides comprehensive access to Formula 1 timing data, telemetry, session results, and historical race information. Built on top of Pandas, it offers powerful data analysis capabilities with an intuitive API designed specifically for F1 data.
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Timing & Telemetry Data" icon="clock">
+    Access detailed lap times, sector times, and high-frequency telemetry data including speed, throttle, brake, and GPS position
+  </Card>
+  
+  <Card title="Session Results" icon="flag-checkered">
+    Retrieve complete session data for practice, qualifying, sprint, and race sessions from 2018 onwards
+  </Card>
+  
+  <Card title="Historical F1 Data" icon="database">
+    Query historical F1 data through the Ergast-compatible jolpica-f1 API for seasons dating back to 1950
+  </Card>
+  
+  <Card title="Pandas Integration" icon="table">
+    All data returns as extended Pandas DataFrames with custom methods for F1-specific operations
+  </Card>
+</CardGroup>
+
+## Data Sources
+
+FastF1 aggregates data from multiple sources:
+
+- **F1 Live Timing**: Real-time and historical timing data from Formula 1's official timing system (2018-present)
+- **Ergast API**: Comprehensive historical F1 data via the jolpica-f1 API
+- **MultiViewer API**: Additional telemetry and session metadata
+
+## Use Cases
+
+FastF1 is ideal for:
+
+- **Race Analysis**: Compare driver performance, analyze strategies, and identify performance trends
+- **Data Visualization**: Create compelling charts and graphics with built-in Matplotlib integration
+- **Statistical Research**: Conduct quantitative analysis of F1 performance data
+- **Machine Learning**: Build predictive models using historical telemetry and results
+
+## Performance & Caching
+
+<Note>
+FastF1 implements a two-stage caching system that significantly speeds up data loading and prevents API rate limit issues. Enabling cache is **strongly recommended** for all use cases.
+</Note>
+
+The cache system stores:
+- **Stage 1**: Raw HTTP requests in a SQLite database
+- **Stage 2**: Parsed Python objects as pickle files
+
+Cached requests don't count towards API rate limits, making your scripts faster and more reliable.
+
+## Python Version Support
+
+FastF1 requires **Python 3.10 or higher** and is tested on:
+- Python 3.10
+- Python 3.11
+- Python 3.12
+- Python 3.13
+- Python 3.14
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Install FastF1 via pip or conda
+  </Card>
+  
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Get started with a complete example
+  </Card>
+</CardGroup>
+
+## Legal Notice
+
+<Warning>
+FastF1 is an unofficial package and is not associated with Formula 1 companies. F1, FORMULA ONE, FORMULA 1, FIA FORMULA ONE WORLD CHAMPIONSHIP, GRAND PRIX and related marks are trademarks of Formula One Licensing B.V.
+</Warning>

@@ -1,0 +1,181 @@
+---
+title: Installation
+description: Install FastF1 using pip or conda and configure the cache for optimal performance
+---
+
+FastF1 can be installed from PyPI using pip or from conda-forge using conda.
+
+## Requirements
+
+Before installing FastF1, ensure you have:
+
+- **Python 3.10 or higher**
+- pip or conda package manager
+
+## Installation Methods
+
+<Tabs>
+  <Tab title="pip">
+    The recommended method is to install FastF1 using pip:
+    
+    ```bash
+    pip install fastf1
+    ```
+    
+    This will install FastF1 and all required dependencies.
+  </Tab>
+  
+  <Tab title="conda">
+    Alternatively, you can install using conda from the conda-forge channel:
+    
+    ```bash
+    conda install -c conda-forge fastf1
+    ```
+  </Tab>
+  
+  <Tab title="PyPI Wheel">
+    You can also download a wheel or source distribution directly from [PyPI](https://pypi.org/project/fastf1/) and install it manually:
+    
+    ```bash
+    pip install fastf1-<version>-py3-none-any.whl
+    ```
+  </Tab>
+</Tabs>
+
+## Dependencies
+
+FastF1 automatically installs the following core dependencies:
+
+- **pandas** (≥2.1.1): DataFrame functionality
+- **numpy** (≥1.26.0): Numerical operations
+- **matplotlib** (≥3.8.0): Plotting and visualization
+- **requests** (≥2.30.0): HTTP requests
+- **requests-cache** (≥1.0.0): HTTP response caching
+- **scipy** (≥1.11.0): Scientific computing
+
+Additional dependencies include: `cryptography`, `platformdirs`, `pydantic`, `pyjwt`, `python-dateutil`, `signalrcore`, `rapidfuzz`, `timple`, and `websockets`.
+
+<Note>
+For the complete and current list of dependency version requirements, refer to the `dependencies` section in [`pyproject.toml`](https://github.com/theOehrly/Fast-F1/blob/master/pyproject.toml).
+</Note>
+
+## Configuring the Cache
+
+<Warning>
+Enabling the cache is **critical** for performance and to avoid exceeding API rate limits. Always configure the cache before loading any session data.
+</Warning>
+
+FastF1 uses a two-stage caching system to store API responses and parsed data. Configure the cache immediately after importing FastF1:
+
+```python
+import fastf1
+
+# Enable cache with a custom directory
+fastf1.Cache.enable_cache('path/to/cache/folder')
+```
+
+### Cache Directory Options
+
+The cache directory is determined by the following precedence:
+
+1. **Explicit configuration** via `Cache.enable_cache()`
+2. **Environment variable** `FASTF1_CACHE`
+3. **OS-specific default location**:
+   - **Windows**: `%LOCALAPPDATA%\Temp\fastf1`
+   - **macOS**: `~/Library/Caches/fastf1`
+   - **Linux**: `~/.cache/fastf1` (or `~/.fastf1` if `~/.cache` doesn't exist)
+
+<Tip>
+Create a dedicated directory for the cache. The cache can grow to several gigabytes depending on usage, but you can delete cached data at any time to reclaim disk space.
+</Tip>
+
+### Cache Configuration Example
+
+```python
+import fastf1
+import os
+
+# Create cache directory if it doesn't exist
+cache_dir = os.path.expanduser('~/fastf1_cache')
+if not os.path.exists(cache_dir):
+    os.makedirs(cache_dir)
+
+# Enable the cache
+fastf1.Cache.enable_cache(cache_dir)
+
+# Now you can load sessions
+session = fastf1.get_session(2023, 'Monaco', 'Q')
+session.load()
+```
+
+### Advanced Cache Options
+
+The `enable_cache()` method supports additional parameters:
+
+```python
+fastf1.Cache.enable_cache(
+    cache_dir='path/to/cache',
+    ignore_version=False,      # Ignore cache version mismatches (not recommended)
+    force_renew=False,          # Force re-download of all data
+    use_requests_cache=True     # Enable Stage 1 HTTP response caching
+)
+```
+
+## Verifying Installation
+
+Verify that FastF1 is installed correctly:
+
+```python
+import fastf1
+
+print(fastf1.__version__)
+```
+
+You can also check the cache status:
+
+```python
+import fastf1
+
+fastf1.Cache.enable_cache('~/fastf1_cache')
+print(fastf1.Cache)  # Shows cache location and size
+```
+
+## Special Environments
+
+### Pyodide and WASM
+
+FastF1 has limited compatibility with Pyodide, JupyterLite, and other WASM-based environments. Installation requires additional steps:
+
+<Card title="JupyterLite FastF1 Guide" icon="link" href="https://github.com/f1datajunkie/jupyterlite-fastf1">
+  External repository with installation instructions and examples for WASM environments
+</Card>
+
+See [GitHub Issue #667](https://github.com/theOehrly/Fast-F1/issues/667) for community discussion and workarounds.
+
+## Troubleshooting
+
+### Cache Directory Not Found
+
+If you see `NotADirectoryError: Cache directory does not exist!`, create the directory first:
+
+```python
+import os
+
+cache_dir = 'path/to/cache'
+os.makedirs(cache_dir, exist_ok=True)
+fastf1.Cache.enable_cache(cache_dir)
+```
+
+### Module Import Errors
+
+Ensure all dependencies are installed correctly:
+
+```bash
+pip install --upgrade fastf1
+```
+
+## Next Steps
+
+<Card title="Quickstart Guide" icon="rocket" href="/quickstart">
+  Learn how to load session data and access telemetry with a complete working example
+</Card>

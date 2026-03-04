@@ -1,0 +1,273 @@
+---
+title: "Results API"
+description: "Reference for FastF1 SessionResults and DriverResult classes"
+---
+
+The SessionResults and DriverResult classes provide access to driver information and session results.
+
+## SessionResults
+
+DataFrame containing session results and driver information for all drivers in a session.
+
+**Constructor:**
+
+SessionResults objects are typically accessed through the `Session.results` property rather than instantiated directly.
+
+---
+
+## Available Columns
+
+### Driver Information
+
+- `DriverNumber` (str): Driver's racing number as string
+- `BroadcastName` (str): Name as shown in broadcasts
+- `Abbreviation` (str): Three-letter driver abbreviation (e.g., 'VER', 'HAM', 'LEC')
+- `FullName` (str): Driver's full name (e.g., 'Max Verstappen')
+- `FirstName` (str): Driver's first name
+- `LastName` (str): Driver's last name
+- `HeadshotUrl` (str): URL to driver's headshot image
+- `CountryCode` (str): Driver's country code (e.g., 'NLD', 'GBR')
+
+### Team Information
+
+- `TeamName` (str): Team name (short version without title sponsors)
+- `TeamColor` (str): Hex color code associated with the team (e.g., '3671C6' for Red Bull)
+
+### API Identifiers
+
+- `DriverId` (str): Driver identifier used by Ergast API
+- `TeamId` (str): Constructor identifier used by Ergast API
+
+### Result Information
+
+#### All Sessions
+
+- `Position` (float64): Driver's finishing position
+  - Available for: Race, Qualifying, Sprint, Sprint Shootout, Sprint Qualifying
+  - Accounts for post-race penalties and disqualifications in Race/Qualifying/Sprint sessions
+  - Uses NaN for DNS (Did Not Start)
+
+#### Race/Sprint Sessions
+
+- `ClassifiedPosition` (str): Official classification result
+  - Integer value if officially classified
+  - 'R' (Retired), 'D' (Disqualified), 'E' (Excluded), 'W' (Withdrawn), 'F' (Failed to qualify), 'N' (Not classified)
+- `GridPosition` (float64): Starting grid position
+- `Status` (str): Finish status or DNF reason
+  - Examples: 'Finished', '+ 1 Lap', 'Crash', 'Gearbox', 'Engine'
+- `Time` (timedelta64[ns]): Total race time
+  - Only available if driver was not more than one lap behind the leader
+- `Points` (float64): Championship points earned
+- `Laps` (float64): Number of laps completed
+
+#### Qualifying Sessions
+
+- `Q1` (timedelta64[ns]): Best Q1 lap time
+- `Q2` (timedelta64[ns]): Best Q2 lap time
+- `Q3` (timedelta64[ns]): Best Q3 lap time
+
+<Note>
+  SessionResults is indexed by driver number and sorted by finishing position by default.
+</Note>
+
+---
+
+## Usage with Session
+
+**Accessing Results:**
+
+```python
+import fastf1
+
+# Load session
+session = fastf1.get_session(2023, 'Monaco', 'Race')
+session.load()
+
+# Get session results
+results = session.results
+
+# View all results
+print(results[['Position', 'Abbreviation', 'TeamName', 'Points']])
+```
+
+**Output:**
+```
+    Position Abbreviation        TeamName  Points
+1        1.0          VER  Red Bull Racing    25.0
+11       2.0          PER  Red Bull Racing    18.0
+16       3.0          LEC         Ferrari    15.0
+...
+```
+
+---
+
+## Filtering and Querying
+
+```python
+# Get specific driver by index (driver number)
+ver_result = results.loc['1']
+print(ver_result['FullName'])  # 'Max Verstappen'
+
+# Filter by team
+ferrari = results[results['TeamName'] == 'Ferrari']
+print(ferrari[['Abbreviation', 'Position']])
+
+# Get top 3
+top_3 = results.head(3)
+print(top_3[['Position', 'Abbreviation', 'Time']])
+
+# Get drivers who finished
+finished = results[results['Status'] == 'Finished']
+
+# Get drivers who DNF'd
+dnf = results[results['Status'] != 'Finished']
+print(dnf[['Abbreviation', 'Status']])
+```
+
+---
+
+## Qualifying Results
+
+```python
+# Load qualifying session
+quali = fastf1.get_session(2023, 'Monaco', 'Q')
+quali.load()
+
+results = quali.results
+
+# View qualifying times
+print(results[['Position', 'Abbreviation', 'Q1', 'Q2', 'Q3']])
+```
+
+**Output:**
+```
+    Position Abbreviation              Q1              Q2              Q3
+1        1.0          VER 0 days 00:01:11  0 days 00:01:10  0 days 00:01:10
+16       2.0          LEC 0 days 00:01:11  0 days 00:01:10  0 days 00:01:10
+...
+```
+
+---
+
+## DriverResult
+
+Series containing result information for a single driver.
+
+**Accessing DriverResult:**
+
+DriverResult objects are obtained by:
+1. Using `Session.get_driver(identifier)`
+2. Slicing SessionResults to a single row
+
+```python
+# Method 1: Using get_driver()
+ver = session.get_driver('VER')
+print(ver['FullName'])  # 'Max Verstappen'
+print(ver['Position'])  # 1.0
+
+# Method 2: Slicing SessionResults
+ver = session.results.loc['1']  # By driver number
+print(type(ver))  # <class 'fastf1.core.DriverResult'>
+```
+
+---
+
+## DriverResult Properties
+
+All columns from SessionResults are accessible as properties:
+
+```python
+driver = session.get_driver('VER')
+
+# Access driver info
+print(f"Name: {driver['FullName']}")
+print(f"Number: {driver['DriverNumber']}")
+print(f"Team: {driver['TeamName']}")
+print(f"Country: {driver['CountryCode']}")
+
+# Access result info
+print(f"Position: {driver['Position']}")
+print(f"Points: {driver['Points']}")
+print(f"Status: {driver['Status']}")
+```
+
+---
+
+### dnf Property
+
+Check if a driver did not finish.
+
+<ResponseField name="type" type="bool">
+  True if driver did not finish (DNF)
+</ResponseField>
+
+```python
+driver = session.get_driver('VER')
+if driver.dnf:
+    print(f"{driver['Abbreviation']} did not finish: {driver['Status']}")
+else:
+    print(f"{driver['Abbreviation']} finished in position {driver['Position']}")
+```
+
+---
+
+## Complete Usage Example
+
+```python
+import fastf1
+import pandas as pd
+
+# Load race session
+session = fastf1.get_session(2023, 'Monaco', 'Race')
+session.load()
+
+results = session.results
+
+# Display results table
+print("\n=== Race Results ===")
+print(results[['Position', 'Abbreviation', 'TeamName', 'Status', 'Points']].to_string())
+
+# Analyze results
+print(f"\nTotal drivers: {len(results)}")
+print(f"Finishers: {len(results[results['Status'] == 'Finished'])}")
+print(f"DNFs: {len(results[results['Status'] != 'Finished'])}")
+
+# Get winner details
+winner = results.iloc[0]
+print(f"\n=== Race Winner ===")
+print(f"Driver: {winner['FullName']}")
+print(f"Team: {winner['TeamName']}")
+print(f"Time: {winner['Time']}")
+print(f"Points: {winner['Points']}")
+
+# Team comparison
+print("\n=== Team Points ===")
+team_points = results.groupby('TeamName')['Points'].sum().sort_values(ascending=False)
+print(team_points)
+
+# Get specific driver
+ver = session.get_driver('VER')
+print(f"\n=== {ver['FullName']} ===")
+print(f"Position: {ver['Position']}")
+print(f"Grid: {ver['GridPosition']}")
+print(f"Points: {ver['Points']}")
+print(f"DNF: {ver.dnf}")
+
+# Compare teammates
+print("\n=== Red Bull Racing ===")
+rbr = results[results['TeamName'] == 'Red Bull Racing']
+for _, driver in rbr.iterrows():
+    print(f"{driver['Abbreviation']}: P{driver['Position']:.0f} - {driver['Points']} pts")
+
+# Qualifying comparison
+quali = fastf1.get_session(2023, 'Monaco', 'Q')
+quali.load()
+
+print("\n=== Qualifying Results ===")
+quali_results = quali.results
+top_10 = quali_results.head(10)
+for _, driver in top_10.iterrows():
+    q3_time = driver['Q3']
+    if pd.notna(q3_time):
+        print(f"P{driver['Position']:.0f} {driver['Abbreviation']}: {q3_time}")
+```

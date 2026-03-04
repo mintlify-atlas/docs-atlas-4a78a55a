@@ -1,0 +1,440 @@
+---
+title: Championship Standings Examples
+description: Track championship progress and analyze season-long performance
+---
+
+These examples demonstrate how to analyze championship standings, season-long performance, and track driver/team positions throughout the season.
+
+## Results Tracker
+
+Create a heatmap showing points scored by each driver at each race.
+
+```python
+import pandas as pd
+import plotly.express as px
+from plotly.io import show
+from fastf1.ergast import Ergast
+
+# Load results for season 2022
+ergast = Ergast()
+races = ergast.get_race_schedule(2022)
+results = []
+
+# For each race in the season
+for rnd, race in races['raceName'].items():
+    # Get results (round no. starts from 1)
+    temp = ergast.get_race_results(season=2022, round=rnd + 1)
+    temp = temp.content[0]
+    
+    # If there is a sprint, get the results as well
+    sprint = ergast.get_sprint_results(season=2022, round=rnd + 1)
+    if sprint.content and sprint.description['round'][0] == rnd + 1:
+        temp = pd.merge(temp, sprint.content[0], on='driverCode', how='left')
+        # Add sprint points and race points to get the total
+        temp['points'] = temp['points_x'] + temp['points_y']
+        temp.drop(columns=['points_x', 'points_y'], inplace=True)
+    
+    # Add round no. and grand prix name
+    temp['round'] = rnd + 1
+    temp['race'] = race.removesuffix(' Grand Prix')
+    temp = temp[['round', 'race', 'driverCode', 'points']]
+    results.append(temp)
+
+# Append all races into a single dataframe
+results = pd.concat(results)
+races = results['race'].drop_duplicates()
+
+# Reshape to wide table (drivers as rows, races as columns)
+results = results.pivot(index='driverCode', columns='round', values='points')
+
+# Rank drivers by total points
+results['total_points'] = results.sum(axis=1)
+results = results.sort_values(by='total_points', ascending=False)
+results.drop(columns='total_points', inplace=True)
+
+# Use race names as column names
+results.columns = races
+
+# Plot heatmap using plotly
+fig = px.imshow(
+    results,
+    text_auto=True,
+    aspect='auto',
+    color_continuous_scale=[[0,    'rgb(198, 219, 239)'],
+                            [0.25, 'rgb(107, 174, 214)'],
+                            [0.5,  'rgb(33,  113, 181)'],
+                            [0.75, 'rgb(8,   81,  156)'],
+                            [1,    'rgb(8,   48,  107)']],
+    labels={'x': 'Race',
+            'y': 'Driver',
+            'color': 'Points'}
+)
+fig.update_xaxes(title_text='')
+fig.update_yaxes(title_text='')
+fig.update_yaxes(tickmode='linear')
+fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='LightGrey',
+                 showline=False,
+                 tickson='boundaries')
+fig.update_xaxes(showgrid=False, showline=False)
+fig.update_layout(plot_bgcolor='rgba(0,0,0,0)')
+fig.update_layout(coloraxis_showscale=False)
+fig.update_layout(xaxis=dict(side='top'))
+fig.update_layout(margin=dict(l=0, r=0, b=0, t=0))
+show(fig)
+```
+
+### What This Example Shows
+
+- Using the Ergast API for historical data
+- Combining race and sprint results
+- Reshaping data with pandas pivot tables
+- Creating interactive heatmaps with Plotly
+- Handling sprint race weekends
+
+### Expected Output
+
+An interactive heatmap where:
+- **Rows**: Drivers (ordered by championship position)
+- **Columns**: Races (in chronological order)
+- **Cell color**: Darker blue = more points
+- **Cell value**: Points scored at that race
+- **Hover**: Shows driver, race, and points
+
+### Understanding the Data
+
+- **DNF/DNS**: Shows as 0 points
+- **Sprint weekends**: Points combined from sprint and race
+- **Driver ordering**: Top of chart = championship leader
+
+## Season Summary
+
+Create an interactive dashboard showing season performance with total points.
+
+```python
+import pandas as pd
+import plotly.graph_objects as go
+from plotly.io import show
+from plotly.subplots import make_subplots
+import fastf1 as ff1
+
+season = 2024
+schedule = ff1.get_event_schedule(season, include_testing=False)
+
+# Get each driver's finishing positions and points for each round
+standings = []
+short_event_names = []
+
+for _, event in schedule.iterrows():
+    event_name, round_number = event["EventName"], event["RoundNumber"]
+    short_event_names.append(event_name.replace("Grand Prix", "").strip())
+    
+    # Load race results
+    race = ff1.get_session(season, event_name, "R")
+    race.load(laps=False, telemetry=False, weather=False, messages=False)
+    
+    # Check for sprint race
+    sprint = None
+    if event["EventFormat"] == "sprint_qualifying":
+        sprint = ff1.get_session(season, event_name, "S")
+        sprint.load(laps=False, telemetry=False, weather=False, messages=False)
+    
+    for _, driver_row in race.results.iterrows():
+        abbreviation, race_points, race_position = (
+            driver_row["Abbreviation"],
+            driver_row["Points"],
+            driver_row["Position"],
+        )
+        
+        sprint_points = 0
+        if sprint is not None:
+            driver_row = sprint.results[
+                sprint.results["Abbreviation"] == abbreviation
+            ]
+            if not driver_row.empty:
+                sprint_points = driver_row["Points"].values[0]
+        
+        standings.append(
+            {
+                "EventName": event_name,
+                "RoundNumber": round_number,
+                "Driver": abbreviation,
+                "Points": race_points + sprint_points,
+                "Position": race_position,
+            }
+        )
+
+# Create dataframe
+df = pd.DataFrame(standings)
+
+# Reshape to heatmap format
+heatmap_data = df.pivot(
+    index="Driver", columns="RoundNumber", values="Points"
+).fillna(0)
+
+# Sort by total points
+heatmap_data["total_points"] = heatmap_data.sum(axis=1)
+heatmap_data = heatmap_data.sort_values(by="total_points", ascending=True)
+total_points = heatmap_data["total_points"].values
+heatmap_data = heatmap_data.drop(columns=["total_points"])
+
+# Do the same for position
+position_data = df.pivot(
+    index="Driver", columns="RoundNumber", values="Position"
+).fillna("N/A")
+
+# Prepare hover info
+hover_info = [
+    [
+        {
+            "position": position_data.at[driver, race],
+        }
+        for race in schedule["RoundNumber"]
+    ]
+    for driver in heatmap_data.index
+]
+
+# Create subplots for two heatmaps
+fig = make_subplots(
+    rows=1,
+    cols=2,
+    column_widths=[0.85, 0.15],
+    subplot_titles=("F1 2024 Season Summary", "Total Points"),
+)
+fig.update_layout(width=900, height=800)
+
+# Per round summary heatmap
+fig.add_trace(
+    go.Heatmap(
+        x=short_event_names,
+        y=heatmap_data.index,
+        z=heatmap_data.values,
+        text=heatmap_data.values,
+        texttemplate="%{text}",
+        textfont={"size": 12},
+        customdata=hover_info,
+        hovertemplate=(
+            "Driver: %{y}<br>"
+            "Race Name: %{x}<br>"
+            "Points: %{z}<br>"
+            "Position: %{customdata.position}<extra></extra>"
+        ),
+        colorscale="YlGnBu",
+        showscale=False,
+        zmin=0,
+        zmax=heatmap_data.values.max(),
+    ),
+    row=1,
+    col=1,
+)
+
+# Heatmap for total points
+fig.add_trace(
+    go.Heatmap(
+        x=["Total Points"] * len(total_points),
+        y=heatmap_data.index,
+        z=total_points,
+        text=total_points,
+        texttemplate="%{text}",
+        textfont={"size": 12},
+        colorscale="YlGnBu",
+        showscale=False,
+        zmin=0,
+        zmax=total_points.max(),
+    ),
+    row=1,
+    col=2,
+)
+
+show(fig)
+```
+
+### What This Example Shows
+
+- Loading full season data efficiently
+- Creating multi-panel Plotly dashboards
+- Handling different sprint race formats by year
+- Adding custom hover information
+- Combining per-race and total points views
+
+### Expected Output
+
+An interactive dashboard with two heatmaps:
+1. **Left panel**: Points scored at each race
+2. **Right panel**: Total championship points
+
+Features:
+- Hover shows driver, race, points, and position
+- Color intensity indicates points scored
+- Drivers ordered by total points (bottom to top)
+
+### Sprint Race Formats by Year
+
+```python
+# 2024 onwards
+if event["EventFormat"] == "sprint_qualifying":
+
+# 2023
+if event["EventFormat"] == "sprint_shootout":
+
+# 2021-2022
+if event["EventFormat"] == "sprint":
+```
+
+## Championship Calculator
+
+Calculate which drivers can still mathematically win the championship.
+
+```python
+import fastf1
+from fastf1.ergast import Ergast
+
+SEASON = 2025
+ROUND = 12
+
+# Get current driver standings
+def get_drivers_standings():
+    ergast = Ergast()
+    standings = ergast.get_driver_standings(season=SEASON, round=ROUND)
+    return standings.content[0]
+
+# Calculate maximum points for remaining season
+def calculate_max_points_for_remaining_season():
+    POINTS_FOR_SPRINT = 8 + 25  # Winning sprint and race
+    POINTS_FOR_CONVENTIONAL = 25  # Winning race
+    
+    events = fastf1.events.get_event_schedule(SEASON, backend='ergast')
+    events = events[events['RoundNumber'] > ROUND]
+    
+    # Count sprint and conventional races
+    sprint_events = len(events.loc[events["EventFormat"] == "sprint_shootout"])
+    conventional_events = len(events.loc[events["EventFormat"] == "conventional"])
+    
+    # Calculate points for each
+    sprint_points = sprint_events * POINTS_FOR_SPRINT
+    conventional_points = conventional_events * POINTS_FOR_CONVENTIONAL
+    
+    return sprint_points + conventional_points
+
+# Determine who can win
+def calculate_who_can_win(driver_standings, max_points):
+    LEADER_POINTS = int(driver_standings.loc[0]['points'])
+    
+    for i, _ in enumerate(driver_standings.iterrows()):
+        driver = driver_standings.loc[i]
+        driver_max_points = int(driver["points"]) + max_points
+        can_win = 'No' if driver_max_points < LEADER_POINTS else 'Yes'
+        
+        print(f"{driver['position']}: {driver['givenName'] + ' ' + driver['familyName']}, "
+              f"Current points: {driver['points']}, "
+              f"Theoretical max points: {driver_max_points}, "
+              f"Can win: {can_win}")
+
+# Execute calculation
+driver_standings = get_drivers_standings()
+points = calculate_max_points_for_remaining_season()
+calculate_who_can_win(driver_standings, points)
+```
+
+### What This Example Shows
+
+- Using Ergast API for current standings
+- Calculating remaining points available
+- Accounting for sprint vs conventional races
+- Mathematical championship possibility analysis
+
+### Expected Output
+
+A text output listing each driver with:
+- Current championship position
+- Current points total
+- Theoretical maximum points (if they win everything)
+- Whether they can mathematically win
+
+### Example Output
+
+```
+1: Max Verstappen, Current points: 350, Theoretical max points: 525, Can win: Yes
+2: Sergio Perez, Current points: 280, Theoretical max points: 455, Can win: Yes
+3: Lewis Hamilton, Current points: 200, Theoretical max points: 375, Can win: Yes
+4: Charles Leclerc, Current points: 180, Theoretical max points: 355, Can win: Yes
+5: Carlos Sainz, Current points: 150, Theoretical max points: 325, Can win: No
+...
+```
+
+### Points System
+
+Current F1 points:
+- **Race**: 25, 18, 15, 12, 10, 8, 6, 4, 2, 1 (top 10)
+- **Sprint**: 8, 7, 6, 5, 4, 3, 2, 1 (top 8)
+- **Fastest lap**: +1 (if finishing in top 10)
+
+## Working with Ergast API
+
+The Ergast API provides historical F1 data:
+
+### Available Methods
+
+```python
+from fastf1.ergast import Ergast
+
+ergast = Ergast()
+
+# Race schedule
+schedule = ergast.get_race_schedule(season=2023)
+
+# Race results
+results = ergast.get_race_results(season=2023, round=5)
+
+# Sprint results
+sprint = ergast.get_sprint_results(season=2023, round=5)
+
+# Driver standings
+standings = ergast.get_driver_standings(season=2023, round=10)
+
+# Constructor standings
+team_standings = ergast.get_constructor_standings(season=2023, round=10)
+
+# Qualifying results
+quali = ergast.get_qualifying_results(season=2023, round=5)
+```
+
+### Ergast vs FastF1
+
+**Use Ergast when:**
+- You need historical championship data
+- You want quick access to results without loading full sessions
+- You're doing multi-season analysis
+
+**Use FastF1 when:**
+- You need telemetry data
+- You want lap-by-lap details
+- You need timing data
+- You're analyzing recent races (2018+)
+
+## Performance Tips
+
+### Loading Season Data
+
+```python
+# Only load what you need
+race.load(laps=False, telemetry=False, weather=False, messages=False)
+
+# For standings analysis, you only need results
+race.load(laps=False, telemetry=False, weather=False, messages=False)
+```
+
+### Caching
+
+```python
+# FastF1 automatically caches data
+# First run: slow (downloads data)
+# Subsequent runs: fast (uses cache)
+
+# Clear cache if needed
+import fastf1
+fastf1.Cache.clear_cache()
+```
+
+<Note>
+  The Ergast API uses historical data and may have a delay of a few days after each race. For the most recent race, use FastF1's session loading instead.
+</Note>

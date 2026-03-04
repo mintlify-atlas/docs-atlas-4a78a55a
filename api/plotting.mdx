@@ -1,0 +1,788 @@
+---
+title: 'Plotting & Visualization'
+description: 'Functions for styling F1 data visualizations with matplotlib'
+---
+
+The `fastf1.plotting` module provides functions for styling and visualizing Formula 1 data with matplotlib. It includes utilities for team colors, driver styling, compound colors, and matplotlib configuration.
+
+## Setup
+
+### setup_mpl()
+
+```python
+fastf1.plotting.setup_mpl(
+    mpl_timedelta_support=True,
+    color_scheme=None
+)
+```
+
+Setup matplotlib for use with FastF1. This is optional but highly recommended for proper timedelta formatting and FastF1 color scheme.
+
+**Parameters:**
+
+- `mpl_timedelta_support` (bool): Enable timedelta support for plotting lap times and sector times. Uses the Timple package to patch matplotlib for proper timedelta tick formatting. Default: `True`
+- `color_scheme` (str | None): Enable the FastF1 color scheme. Valid values: `'fastf1'` or `None`. Default: `None`
+
+**Example:**
+
+```python
+import fastf1
+import fastf1.plotting
+
+# Setup matplotlib with timedelta support and FastF1 colors
+fastf1.plotting.setup_mpl(
+    mpl_timedelta_support=True,
+    color_scheme='fastf1'
+)
+
+session = fastf1.get_session(2023, 'Monza', 'R')
+session.load()
+```
+
+<Note>
+The FastF1 color scheme applies a dark theme optimized for F1 data visualization, as seen in all example images in the documentation.
+</Note>
+
+## Color Functions
+
+### get_team_color()
+
+```python
+fastf1.plotting.get_team_color(
+    identifier,
+    session,
+    *,
+    colormap='default',
+    exact_match=False
+)
+```
+
+Get a team color based on a recognizable part of the team name.
+
+**Parameters:**
+
+- `identifier` (str): A recognizable part of the team name (e.g., "Red Bull", "Ferrari", "Mercedes")
+- `session` (Session): The session for which the data should be obtained
+- `colormap` (str): One of `'default'`, `'fastf1'`, or `'official'`. Default: `'default'`
+- `exact_match` (bool): Match the identifier exactly (case-insensitive). Default: `False`
+
+**Returns:** str - A hexadecimal RGB color code (e.g., `'#FF0000'`)
+
+**Example:**
+
+```python
+import fastf1
+import fastf1.plotting
+
+session = fastf1.get_session(2023, 'Monza', 'R')
+session.load()
+
+# Get Ferrari's team color
+ferrari_color = fastf1.plotting.get_team_color('Ferrari', session)
+print(ferrari_color)  # '#E8002D'
+
+# Use in a plot
+import matplotlib.pyplot as plt
+laps = session.laps.pick_driver('LEC')
+plt.plot(laps['LapNumber'], laps['LapTime'], color=ferrari_color)
+```
+
+### get_driver_color()
+
+```python
+fastf1.plotting.get_driver_color(
+    identifier,
+    session,
+    *,
+    colormap='default',
+    exact_match=False
+)
+```
+
+Get the color associated with a driver based on their abbreviation or name.
+
+<Note>
+This function returns the team color of the team the driver participated for in the session. There are no separate colors for each driver. Use `get_driver_style()` to differentiate drivers of the same team.
+</Note>
+
+**Parameters:**
+
+- `identifier` (str): Driver abbreviation (e.g., "VER", "HAM") or recognizable part of driver name
+- `session` (Session): The session for which the data should be obtained
+- `colormap` (str): One of `'default'`, `'fastf1'`, or `'official'`. Default: `'default'`
+- `exact_match` (bool): Match the identifier exactly. Default: `False`
+
+**Returns:** str - A hexadecimal RGB color code
+
+**Example:**
+
+```python
+# Get driver colors
+verstappen_color = fastf1.plotting.get_driver_color('VER', session)
+hamilton_color = fastf1.plotting.get_driver_color('Hamilton', session)
+```
+
+### get_compound_color()
+
+```python
+fastf1.plotting.get_compound_color(compound, session)
+```
+
+Get the compound color as hexadecimal RGB color code for a given tire compound.
+
+**Parameters:**
+
+- `compound` (str): The name of the compound (e.g., "SOFT", "MEDIUM", "HARD", "INTERMEDIATE", "WET")
+- `session` (Session): The session for which the data should be obtained
+
+**Returns:** str - A hexadecimal RGB color code
+
+**Example:**
+
+```python
+soft_color = fastf1.plotting.get_compound_color('SOFT', session)
+medium_color = fastf1.plotting.get_compound_color('MEDIUM', session)
+hard_color = fastf1.plotting.get_compound_color('HARD', session)
+
+# Plot lap times colored by compound
+laps = session.laps.pick_driver('VER')
+for compound in ['SOFT', 'MEDIUM', 'HARD']:
+    compound_laps = laps[laps['Compound'] == compound]
+    color = fastf1.plotting.get_compound_color(compound, session)
+    plt.scatter(compound_laps['LapNumber'], compound_laps['LapTime'], 
+                color=color, label=compound)
+```
+
+## Driver Styling
+
+### get_driver_style()
+
+```python
+fastf1.plotting.get_driver_style(
+    identifier,
+    style,
+    session,
+    *,
+    colormap='default',
+    additional_color_kws=(),
+    exact_match=False
+)
+```
+
+Get a plotting style that is unique for a driver, combining team colors with unique markers/line styles.
+
+This function simplifies creating unique and distinguishable visual styles for multiple drivers. Drivers from the same team get the same color but different line styles or markers.
+
+**Parameters:**
+
+- `identifier` (str): Driver abbreviation or recognizable part of driver name
+- `style` (str | Sequence[str] | Sequence[dict]): List of matplotlib plot arguments or custom style dictionaries
+- `session` (Session): The session for which the data should be obtained
+- `colormap` (str): One of `'default'`, `'fastf1'`, or `'official'`. Default: `'default'`
+- `additional_color_kws` (list | tuple): Additional keys to treat as colors for the `'auto'` magic value. Default: `()`
+- `exact_match` (bool): Match the identifier exactly. Default: `False`
+
+**Returns:** dict - A dictionary of plot style arguments
+
+**Built-in styling options:**
+
+The function supports these matplotlib arguments: `linestyle`, `marker`, `color`, `facecolor`, `edgecolor`, and most other color-related arguments.
+
+**Option 1: Built-in styles**
+
+```python
+import matplotlib.pyplot as plt
+
+session = fastf1.get_session(2023, 10, 'R')
+session.load()
+
+# Get styles for Aston Martin drivers (same team, different markers)
+alo_style = fastf1.plotting.get_driver_style('ALO', ['color', 'marker'], session)
+str_style = fastf1.plotting.get_driver_style('STR', ['color', 'marker'], session)
+
+print(alo_style)  # {'color': '#00665e', 'marker': 'x'}
+print(str_style)  # {'color': '#00665e', 'marker': 'o'}
+
+# Use in scatter plot
+alo_laps = session.laps.pick_driver('ALO')
+str_laps = session.laps.pick_driver('STR')
+
+plt.scatter(alo_laps['LapNumber'], alo_laps['LapTime'], **alo_style, label='Alonso')
+plt.scatter(str_laps['LapNumber'], str_laps['LapTime'], **str_style, label='Stroll')
+```
+
+**Option 2: Custom styles with magic 'auto' color**
+
+```python
+# Define custom styles for each driver in a team
+my_styles = [
+    {'linestyle': 'solid', 'color': 'auto', 'linewidth': 2},
+    {'linestyle': 'dotted', 'color': 'auto', 'linewidth': 2}
+]
+
+# 'auto' will be replaced with team color
+alo_style = fastf1.plotting.get_driver_style('ALO', my_styles, session)
+str_style = fastf1.plotting.get_driver_style('STR', my_styles, session)
+
+print(alo_style)  # {'linestyle': 'solid', 'color': '#00665e', 'linewidth': 2}
+print(str_style)  # {'linestyle': 'dotted', 'color': '#00665e', 'linewidth': 2}
+```
+
+**Available built-in style variants:**
+
+- **Line styles**: `'solid'`, `'dashed'`, `'dashdot'`, `'dotted'`
+- **Markers**: `'x'`, `'o'`, `'^'`, `'D'`
+
+Up to 4 drivers per team are supported with unique styles.
+
+## Color Mappings
+
+### get_driver_color_mapping()
+
+```python
+fastf1.plotting.get_driver_color_mapping(
+    session,
+    *,
+    colormap='default'
+)
+```
+
+Returns a dictionary mapping driver abbreviations to their team colors.
+
+**Parameters:**
+
+- `session` (Session): The session for which the data should be obtained
+- `colormap` (str): One of `'default'`, `'fastf1'`, or `'official'`. Default: `'default'`
+
+**Returns:** dict[str, str] - Dictionary mapping driver abbreviations to RGB hex colors
+
+**Example:**
+
+```python
+color_map = fastf1.plotting.get_driver_color_mapping(session)
+print(color_map)
+# {'VER': '#3671C6', 'PER': '#3671C6', 'HAM': '#27F4D2', ...}
+
+# Use for batch coloring
+for driver in session.drivers:
+    laps = session.laps.pick_driver(driver)
+    plt.plot(laps['LapNumber'], laps['LapTime'], 
+             color=color_map[driver], label=driver)
+```
+
+### get_compound_mapping()
+
+```python
+fastf1.plotting.get_compound_mapping(session)
+```
+
+Returns a dictionary mapping compound names to their colors.
+
+**Parameters:**
+
+- `session` (Session): The session for which the data should be obtained
+
+**Returns:** dict[str, str] - Dictionary mapping compound names to RGB hex colors
+
+**Example:**
+
+```python
+compound_colors = fastf1.plotting.get_compound_mapping(session)
+print(compound_colors)
+# {'SOFT': '#FF0000', 'MEDIUM': '#FFF000', 'HARD': '#FFFFFF', ...}
+```
+
+## Information Functions
+
+### get_team_name()
+
+```python
+fastf1.plotting.get_team_name(
+    identifier,
+    session,
+    *,
+    short=False,
+    exact_match=False
+)
+```
+
+Get a full or shortened team name based on a recognizable part of the team name.
+
+**Parameters:**
+
+- `identifier` (str): A recognizable part of the team name
+- `session` (Session): The session for which the data should be obtained
+- `short` (bool): If `True`, return a shortened version. Default: `False`
+- `exact_match` (bool): Match the identifier exactly. Default: `False`
+
+**Returns:** str - The team name
+
+**Example:**
+
+```python
+full_name = fastf1.plotting.get_team_name('Red Bull', session)
+print(full_name)  # "Red Bull Racing"
+
+short_name = fastf1.plotting.get_team_name('Red Bull', session, short=True)
+print(short_name)  # "Red Bull"
+```
+
+### get_team_name_by_driver()
+
+```python
+fastf1.plotting.get_team_name_by_driver(
+    identifier,
+    session,
+    *,
+    short=False,
+    exact_match=False
+)
+```
+
+Get a team name based on a driver's abbreviation or name.
+
+**Parameters:**
+
+- `identifier` (str): Driver abbreviation or recognizable part of driver name
+- `session` (Session): The session for which the data should be obtained
+- `short` (bool): If `True`, return a shortened version. Default: `False`
+- `exact_match` (bool): Match the identifier exactly. Default: `False`
+
+**Returns:** str - The team name
+
+**Example:**
+
+```python
+team = fastf1.plotting.get_team_name_by_driver('VER', session)
+print(team)  # "Red Bull Racing"
+```
+
+### get_driver_name()
+
+```python
+fastf1.plotting.get_driver_name(
+    identifier,
+    session,
+    *,
+    exact_match=False
+)
+```
+
+Get a full driver name based on abbreviation or partial name.
+
+**Parameters:**
+
+- `identifier` (str): Driver abbreviation or recognizable part of driver name
+- `session` (Session): The session for which the data should be obtained
+- `exact_match` (bool): Match the identifier exactly. Default: `False`
+
+**Returns:** str - The full driver name
+
+**Example:**
+
+```python
+name = fastf1.plotting.get_driver_name('VER', session)
+print(name)  # "Max VERSTAPPEN"
+```
+
+### get_driver_abbreviation()
+
+```python
+fastf1.plotting.get_driver_abbreviation(
+    identifier,
+    session,
+    *,
+    exact_match=False
+)
+```
+
+Get a driver's abbreviation based on their name or abbreviation.
+
+**Parameters:**
+
+- `identifier` (str): Recognizable part of driver name or abbreviation
+- `session` (Session): The session for which the data should be obtained
+- `exact_match` (bool): Match the identifier exactly. Default: `False`
+
+**Returns:** str - The driver abbreviation
+
+**Example:**
+
+```python
+abbr = fastf1.plotting.get_driver_abbreviation('Verstappen', session)
+print(abbr)  # "VER"
+```
+
+### get_driver_names_by_team()
+
+```python
+fastf1.plotting.get_driver_names_by_team(
+    identifier,
+    session,
+    *,
+    exact_match=False
+)
+```
+
+Get a list of full names of all drivers for a team in a session.
+
+**Parameters:**
+
+- `identifier` (str): A recognizable part of the team name
+- `session` (Session): The session for which the data should be obtained
+- `exact_match` (bool): Match the identifier exactly. Default: `False`
+
+**Returns:** list[str] - List of driver names
+
+**Example:**
+
+```python
+drivers = fastf1.plotting.get_driver_names_by_team('Mercedes', session)
+print(drivers)  # ['Lewis HAMILTON', 'George RUSSELL']
+```
+
+### get_driver_abbreviations_by_team()
+
+```python
+fastf1.plotting.get_driver_abbreviations_by_team(
+    identifier,
+    session,
+    *,
+    exact_match=False
+)
+```
+
+Get a list of abbreviations of all drivers for a team in a session.
+
+**Parameters:**
+
+- `identifier` (str): A recognizable part of the team name
+- `session` (Session): The session for which the data should be obtained
+- `exact_match` (bool): Match the identifier exactly. Default: `False`
+
+**Returns:** list[str] - List of driver abbreviations
+
+**Example:**
+
+```python
+drivers = fastf1.plotting.get_driver_abbreviations_by_team('Ferrari', session)
+print(drivers)  # ['LEC', 'SAI']
+```
+
+## Listing Functions
+
+### list_team_names()
+
+```python
+fastf1.plotting.list_team_names(session, *, short=False)
+```
+
+Returns a list of all team names in the session.
+
+**Parameters:**
+
+- `session` (Session): The session for which the data should be obtained
+- `short` (bool): If `True`, return shortened versions. Default: `False`
+
+**Returns:** list[str] - List of team names
+
+**Example:**
+
+```python
+teams = fastf1.plotting.list_team_names(session)
+print(teams)
+# ['Red Bull Racing', 'Ferrari', 'Mercedes', ...]
+```
+
+### list_driver_abbreviations()
+
+```python
+fastf1.plotting.list_driver_abbreviations(session)
+```
+
+Returns a list of all driver abbreviations in the session.
+
+**Parameters:**
+
+- `session` (Session): The session for which the data should be obtained
+
+**Returns:** list[str] - List of driver abbreviations
+
+**Example:**
+
+```python
+drivers = fastf1.plotting.list_driver_abbreviations(session)
+print(drivers)
+# ['VER', 'PER', 'HAM', 'RUS', 'LEC', 'SAI', ...]
+```
+
+### list_driver_names()
+
+```python
+fastf1.plotting.list_driver_names(session)
+```
+
+Returns a list of all full driver names in the session.
+
+**Parameters:**
+
+- `session` (Session): The session for which the data should be obtained
+
+**Returns:** list[str] - List of driver names
+
+**Example:**
+
+```python
+drivers = fastf1.plotting.list_driver_names(session)
+print(drivers)
+# ['Max VERSTAPPEN', 'Sergio PEREZ', 'Lewis HAMILTON', ...]
+```
+
+### list_compounds()
+
+```python
+fastf1.plotting.list_compounds(session)
+```
+
+Returns a list of all compound names for the season (not session-specific).
+
+**Parameters:**
+
+- `session` (Session): The session for which the season should be determined
+
+**Returns:** list[str] - List of compound names
+
+**Example:**
+
+```python
+compounds = fastf1.plotting.list_compounds(session)
+print(compounds)
+# ['SOFT', 'MEDIUM', 'HARD', 'INTERMEDIATE', 'WET']
+```
+
+## Legend Utilities
+
+### add_sorted_driver_legend()
+
+```python
+fastf1.plotting.add_sorted_driver_legend(ax, session, *args, **kwargs)
+```
+
+Adds a legend to the axis where drivers are grouped by team and ordered consistently with plot styles.
+
+This is a drop-in replacement for `ax.legend()` that creates a more visually pleasing legend when using driver names or abbreviations as labels.
+
+**Parameters:**
+
+- `ax` (matplotlib.axes.Axes): A Matplotlib Axes object
+- `session` (Session): The session for which the data should be obtained
+- `*args`: Matplotlib legend args (same as `ax.legend()`)
+- `**kwargs`: Matplotlib legend kwargs (same as `ax.legend()`)
+
+**Returns:** matplotlib.legend.Legend
+
+**Example:**
+
+```python
+import matplotlib.pyplot as plt
+
+fig, ax = plt.subplots()
+
+# Plot data for multiple drivers
+for driver in ['VER', 'PER', 'HAM', 'RUS']:
+    laps = session.laps.pick_driver(driver)
+    style = fastf1.plotting.get_driver_style(driver, ['color', 'linestyle'], session)
+    ax.plot(laps['LapNumber'], laps['LapTime'], **style, label=driver)
+
+# Add sorted legend (drivers grouped by team)
+fastf1.plotting.add_sorted_driver_legend(ax, session, loc='upper right')
+plt.show()
+```
+
+## Configuration Functions
+
+### set_default_colormap()
+
+```python
+fastf1.plotting.set_default_colormap(colormap)
+```
+
+Set the default colormap used for all color lookups.
+
+**Parameters:**
+
+- `colormap` (str): One of `'fastf1'` or `'official'`
+
+**Example:**
+
+```python
+# Use official F1 team colors by default
+fastf1.plotting.set_default_colormap('official')
+
+# Now all get_*_color() functions use official colors
+color = fastf1.plotting.get_team_color('Ferrari', session)
+```
+
+<Note>
+The `'fastf1'` colormap uses colors optimized for visualization, while `'official'` uses the teams' official brand colors.
+</Note>
+
+### override_team_constants()
+
+```python
+fastf1.plotting.override_team_constants(
+    identifier,
+    session,
+    *,
+    short_name=None,
+    official_color=None,
+    fastf1_color=None
+)
+```
+
+Override the default team constants for a specific team. Changes only apply to the current session.
+
+This is intended for advanced users who want to customize team constants.
+
+**Parameters:**
+
+- `identifier` (str): A part of the team name (must match exactly, no fuzzy matching)
+- `session` (Session): The session for which the override should be applied
+- `short_name` (str | None): New value for the short name
+- `official_color` (str | None): New value for official color (hexadecimal RGB)
+- `fastf1_color` (str | None): New value for FastF1 color (hexadecimal RGB)
+
+**Example:**
+
+```python
+# Override Ferrari's color for this session
+fastf1.plotting.override_team_constants(
+    'Ferrari',
+    session,
+    fastf1_color='#FF0000',
+    short_name='Ferrari'
+)
+
+# Now get_team_color will return the overridden color
+color = fastf1.plotting.get_team_color('Ferrari', session)
+print(color)  # '#FF0000'
+```
+
+## Complete Visualization Example
+
+Here's a comprehensive example combining multiple plotting functions:
+
+```python
+import fastf1
+import fastf1.plotting
+import matplotlib.pyplot as plt
+
+# Setup
+fastf1.plotting.setup_mpl(mpl_timedelta_support=True, color_scheme='fastf1')
+
+# Load session
+session = fastf1.get_session(2023, 'Monza', 'R')
+session.load()
+
+# Create figure
+fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10))
+
+# Plot 1: Lap times by driver with team colors and unique styles
+drivers = ['VER', 'PER', 'LEC', 'SAI']
+for driver in drivers:
+    laps = session.laps.pick_driver(driver)
+    style = fastf1.plotting.get_driver_style(
+        driver, 
+        ['color', 'linestyle', 'marker'],
+        session
+    )
+    ax1.plot(laps['LapNumber'], laps['LapTime'], 
+             **style, label=driver, markersize=4)
+
+ax1.set_xlabel('Lap Number')
+ax1.set_ylabel('Lap Time')
+ax1.set_title('Lap Times by Driver')
+fastf1.plotting.add_sorted_driver_legend(ax1, session)
+
+# Plot 2: Tire strategy with compound colors
+driver = 'VER'
+laps = session.laps.pick_driver(driver)
+compounds = laps['Compound'].unique()
+
+for compound in compounds:
+    compound_laps = laps[laps['Compound'] == compound]
+    color = fastf1.plotting.get_compound_color(compound, session)
+    ax2.scatter(compound_laps['LapNumber'], compound_laps['LapTime'],
+                color=color, label=compound, s=50)
+
+ax2.set_xlabel('Lap Number')
+ax2.set_ylabel('Lap Time')
+ax2.set_title(f'Tire Strategy - {driver}')
+ax2.legend()
+
+plt.tight_layout()
+plt.show()
+```
+
+## Color Maps
+
+FastF1 provides two color maps:
+
+### FastF1 Colormap (default)
+
+Colors optimized for data visualization with good contrast and distinction:
+- Designed for clarity in plots
+- Works well with the FastF1 color scheme
+- Default option for all color functions
+
+### Official Colormap
+
+Official team brand colors:
+- Uses teams' official brand colors
+- May have less contrast in visualizations
+- Activate with `colormap='official'` parameter
+
+**Switching color maps:**
+
+```python
+# Per function call
+color = fastf1.plotting.get_team_color('Ferrari', session, colormap='official')
+
+# Set globally
+fastf1.plotting.set_default_colormap('official')
+```
+
+## Fuzzy Matching
+
+Most functions support fuzzy string matching for team and driver identifiers:
+
+```python
+# All of these work:
+fastf1.plotting.get_team_color('Red Bull', session)
+fastf1.plotting.get_team_color('redbull', session)
+fastf1.plotting.get_team_color('red bull racing', session)
+
+# Driver matching
+fastf1.plotting.get_driver_name('max', session)  # Returns "Max VERSTAPPEN"
+fastf1.plotting.get_driver_name('verstappen', session)
+fastf1.plotting.get_driver_name('VER', session)
+```
+
+Set `exact_match=True` to disable fuzzy matching and require exact matches (case-insensitive).
+
+## Error Handling
+
+Functions may raise the following exceptions:
+
+- `FuzzyMatchError`: When `exact_match=False` and the identifier couldn't be matched with sufficient confidence
+- `KeyError`: When `exact_match=True` and no exact match exists
+- `ValueError`: When invalid parameters are provided (e.g., invalid colormap name)
+
+**Example:**
+
+```python
+try:
+    color = fastf1.plotting.get_team_color('InvalidTeam', session, exact_match=True)
+except KeyError:
+    print("Team not found")
+```

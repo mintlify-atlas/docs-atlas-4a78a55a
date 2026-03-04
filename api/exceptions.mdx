@@ -1,0 +1,161 @@
+---
+title: 'Exceptions'
+description: 'Custom exception classes for error handling in FastF1'
+---
+
+## Overview
+
+FastF1 uses custom exceptions to handle various error conditions during data loading and processing. The exception hierarchy is designed to support graceful degradation during data loading while ensuring critical errors are always raised.
+
+## Exception Handling Strategy
+
+FastF1 code can be categorized into two parts:
+
+1. **Interface code** - Tightly coupled with the user-facing API for short-running operations
+2. **Data processing code** - Self-contained operations that handle errors gracefully, preferring to return degraded data with warnings rather than no data at all
+
+## Default Exceptions
+
+### DataNotLoadedError
+
+```python
+class fastf1.exceptions.DataNotLoadedError(Exception)
+```
+
+Raised if an attempt is made to access data that has not been loaded yet.
+
+**Example:**
+```python
+import fastf1 as ff1
+
+session = ff1.get_session(2023, 'Monaco', 'R')
+# Trying to access data before loading
+try:
+    laps = session.laps  # Will raise DataNotLoadedError
+except ff1.exceptions.DataNotLoadedError:
+    print("Please load the session first")
+    session.load()
+    laps = session.laps
+```
+
+### NoLapDataError
+
+```python
+class fastf1.exceptions.NoLapDataError(Exception)
+```
+
+Raised if the API request does not fail, but there is no usable data after processing the result.
+
+**Error Message:**
+```
+Failed to load session because the API did not provide any usable data.
+```
+
+### FuzzyMatchError
+
+```python
+class fastf1.exceptions.FuzzyMatchError(ValueError)
+```
+
+Raised if no fuzzy match could be found with sufficient confidence.
+
+This exception is used when FastF1 attempts to match user input (like driver names or team names) to valid values but cannot find a match with sufficient confidence.
+
+## Ergast API Exceptions
+
+### ErgastError
+
+```python
+class fastf1.exceptions.ErgastError(Exception)
+```
+
+Base class for Ergast API errors. All Ergast-related exceptions inherit from this class.
+
+### ErgastJsonError
+
+```python
+class fastf1.exceptions.ErgastJsonError(ErgastError)
+```
+
+The response returned by the server could not be parsed.
+
+Raised when the Ergast API returns a response that cannot be decoded as valid JSON.
+
+### ErgastInvalidRequestError
+
+```python
+class fastf1.exceptions.ErgastInvalidRequestError(ErgastError)
+```
+
+The server rejected the request because it was invalid.
+
+Raised when the Ergast API rejects a request due to invalid parameters or request structure.
+
+## Critical Exceptions
+
+Critical exceptions derive from `FastF1CriticalError` and are designed to break through catch-all error handling during data processing.
+
+### FastF1CriticalError
+
+```python
+class fastf1.exceptions.FastF1CriticalError(RuntimeError)
+```
+
+Base class for unrecoverable exceptions that occur during internal data processing. These exceptions are always raised to the user and data processing is terminated.
+
+<Warning>
+  Exceptions deriving from this base class must only be used in data processing code. They must never be handled by FastF1.
+</Warning>
+
+### RateLimitExceededError
+
+```python
+class fastf1.exceptions.RateLimitExceededError(FastF1CriticalError)
+```
+
+Raised if a hard rate limit is exceeded for any API.
+
+This is a critical error that cannot be recovered from gracefully. When this exception is raised, data loading must be terminated and the user should wait before making additional requests.
+
+**Example handling:**
+```python
+import fastf1 as ff1
+import time
+
+try:
+    session = ff1.get_session(2023, 'Monaco', 'R')
+    session.load()
+except ff1.exceptions.RateLimitExceededError:
+    print("Rate limit exceeded. Waiting before retry...")
+    time.sleep(60)  # Wait 60 seconds
+    session.load()  # Retry
+```
+
+## Deprecated Exceptions
+
+### InvalidSessionError
+
+<Warning>
+  Deprecated since version 3.9.0. This exception is unused and will be removed in version 3.11.0.
+</Warning>
+
+```python
+class fastf1.exceptions.InvalidSessionError(Exception)
+```
+
+Raised if no session for the specified event name, type, and year can be found.
+
+**Error Message:**
+```
+No matching session can be found.
+```
+
+## Usage Notes
+
+<Note>
+  Most FastF1 exceptions do not need to be explicitly caught in normal usage. The library handles errors gracefully and will typically warn the user while continuing to provide degraded data where possible.
+</Note>
+
+<Tip>
+  When developing with FastF1, you may want to enable debug mode to see the full exception traceback instead of gracefully handled warnings. Set the environment variable `FASTF1_DEBUG=1` or use `fastf1.logger.LoggingManager.debug = True`.
+</Tip>

@@ -1,0 +1,480 @@
+---
+title: 'Cache'
+description: 'API caching system for FastF1'
+---
+
+## Overview
+
+FastF1's caching system significantly speeds up data loading and prevents exceeding API rate limits. The cache has two stages:
+
+1. **Stage 1**: Raw HTTP GET/POST request caching (using SQLite)
+2. **Stage 2**: Parsed data caching (using pickle files)
+
+Caching is highly recommended for all FastF1 usage.
+
+## Cache Class
+
+The `Cache` class provides class-level methods for configuring and managing the cache.
+
+```python
+from fastf1 import Cache
+```
+
+### enable_cache()
+
+Enables the API cache. This should be called at the beginning of your script, right after imports.
+
+```python
+Cache.enable_cache(
+    cache_dir='path/to/cache',
+    ignore_version=False,
+    force_renew=False,
+    use_requests_cache=True
+)
+```
+
+#### Parameters
+
+<ParamField path="cache_dir" type="str" required>
+  Path to the directory for storing cached data. The directory must exist. Supports:
+  - Environment variables: `%LOCALAPPDATA%`, `$HOME`, etc.
+  - User home expansion: `~` or `~user`
+</ParamField>
+
+<ParamField path="ignore_version" type="bool" default="False">
+  Ignore if cached data was created with a different version of the API parser.
+  
+  <Warning>
+    Not recommended - may cause crashes or errors due to incompatible data.
+  </Warning>
+</ParamField>
+
+<ParamField path="force_renew" type="bool" default="False">
+  Ignore existing cached data and re-download everything, updating the cache.
+</ParamField>
+
+<ParamField path="use_requests_cache" type="bool" default="True">
+  Enable stage 1 caching (raw HTTP requests). Disable if you only want stage 2 caching.
+</ParamField>
+
+#### Example
+
+```python
+import fastf1
+from fastf1 import Cache
+
+# Enable cache at the start of your script
+Cache.enable_cache('~/fastf1_cache')
+
+# Now load data - it will be cached
+session = fastf1.get_session(2023, 'Monaco', 'Q')
+session.load()
+```
+
+### clear_cache()
+
+Clears all cached data by deleting cache files.
+
+```python
+Cache.clear_cache(
+    cache_dir=None,
+    deep=False
+)
+```
+
+#### Parameters
+
+<ParamField path="cache_dir" type="str | None" default="None">
+  Path to the cache directory to clear. If `None`, uses the default cache directory.
+</ParamField>
+
+<ParamField path="deep" type="bool" default="False">
+  Also clear the stage 1 requests cache (SQLite database). If `False`, only clears stage 2 pickle files.
+</ParamField>
+
+#### Example
+
+```python
+# Clear only parsed data (stage 2)
+Cache.clear_cache()
+
+# Clear everything including HTTP cache
+Cache.clear_cache(deep=True)
+
+# Clear a specific cache directory
+Cache.clear_cache(cache_dir='/path/to/cache', deep=True)
+```
+
+<Note>
+  Can be called without enabling the cache first.
+</Note>
+
+### get_cache_info()
+
+Returns information about the cache directory and its size.
+
+```python
+path, size = Cache.get_cache_info()
+```
+
+#### Returns
+
+<ResponseField name="path" type="str | None">
+  Path to the cache directory, or `None` if cache is not configured
+</ResponseField>
+
+<ResponseField name="size" type="int | None">
+  Total size of the cache in bytes, or `None` if cache is not configured
+</ResponseField>
+
+#### Example
+
+```python
+path, size_bytes = Cache.get_cache_info()
+
+if path:
+    size_mb = size_bytes / (1024 * 1024)
+    print(f"Cache: {path}")
+    print(f"Size: {size_mb:.2f} MB")
+else:
+    print("Cache not configured")
+```
+
+### disabled()
+
+Returns a context manager that temporarily disables the cache.
+
+```python
+with Cache.disabled():
+    # No caching happens here
+    session = fastf1.get_session(2023, 'Monaco', 'R')
+    session.load()
+```
+
+#### Returns
+
+Context manager object
+
+<Note>
+  The context manager is not multithreading-safe.
+</Note>
+
+### set_disabled()
+
+Disables the cache while keeping the configuration intact.
+
+```python
+Cache.set_disabled()
+```
+
+Disables both stage 1 and stage 2 caching. Use `set_enabled()` to re-enable.
+
+<Note>
+  Prefer using `disabled()` context manager for temporary disabling.
+</Note>
+
+<Warning>
+  Not multithreading-safe.
+</Warning>
+
+### set_enabled()
+
+Re-enables the cache after it was disabled with `set_disabled()`.
+
+```python
+Cache.set_enabled()
+```
+
+<Warning>
+  Cache must be properly configured first using `enable_cache()`. This method only re-enables a previously disabled cache.
+</Warning>
+
+### offline_mode()
+
+Enables or disables offline mode.
+
+```python
+Cache.offline_mode(enabled=True)
+```
+
+#### Parameters
+
+<ParamField path="enabled" type="bool" required>
+  `True` to enable offline mode, `False` to disable
+</ParamField>
+
+In offline mode:
+- No actual requests are sent to APIs
+- Only cached data is returned
+- Useful for working with unstable internet or freezing cache state
+
+<Note>
+  Must be called after `enable_cache()` when using a custom cache directory.
+</Note>
+
+#### Example
+
+```python
+import fastf1
+from fastf1 import Cache
+
+Cache.enable_cache('~/fastf1_cache')
+Cache.offline_mode(True)
+
+# Only cached data will be used
+session = fastf1.get_session(2023, 'Monaco', 'Q')
+session.load()  # Fails if data not in cache
+```
+
+### ci_mode()
+
+Enables or disables CI (Continuous Integration) mode.
+
+```python
+Cache.ci_mode(enabled=True)
+```
+
+#### Parameters
+
+<ParamField path="enabled" type="bool" required>
+  `True` to enable CI mode, `False` to disable
+</ParamField>
+
+In CI mode:
+- Cached requests are reused even if expired
+- Every request is only made once and cached indefinitely
+- Stage 2 (pickle) cache is disabled
+- Useful for test environments to reduce API calls and increase predictability
+
+<Note>
+  Must be called after `enable_cache()` when using a custom cache directory.
+</Note>
+
+## Cache Configuration
+
+The cache directory is determined in order of precedence:
+
+1. Explicit call to `enable_cache()`
+2. `FASTF1_CACHE` environment variable
+3. OS-dependent default location
+
+### Default Cache Locations
+
+<CodeGroup>
+```bash Windows
+%LOCALAPPDATA%\Temp\fastf1
+```
+
+```bash macOS
+~/Library/Caches/fastf1
+```
+
+```bash Linux
+~/.cache/fastf1
+# or if ~/.cache doesn't exist:
+~/.fastf1
+```
+</CodeGroup>
+
+### Environment Variable
+
+Set the `FASTF1_CACHE` environment variable to configure the default cache location:
+
+```bash
+export FASTF1_CACHE="/path/to/cache"
+```
+
+<Note>
+  This value is ignored if `enable_cache()` is called explicitly.
+</Note>
+
+## Cache Structure
+
+The cache directory contains:
+
+```
+cache_dir/
+├── fastf1_http_cache.sqlite    # Stage 1: HTTP request cache
+└── static/                      # Stage 2: Parsed data cache
+    ├── 2023/
+    │   ├── 2023-05-28_Monaco_Grand_Prix/
+    │   │   ├── Qualifying/
+    │   │   │   ├── session_info.ff1pkl
+    │   │   │   ├── lap_times.ff1pkl
+    │   │   │   └── ...
+    │   │   └── Race/
+    │   └── ...
+    └── ...
+```
+
+### Manual Cache Management
+
+You can manually delete specific events or sessions:
+
+1. Navigate to the cache directory
+2. Find the year/event/session folder
+3. Delete the folder
+
+<Warning>
+  Deleting the SQLite file removes all HTTP request cache. You cannot selectively delete individual requests from it.
+</Warning>
+
+## Helper Functions
+
+While not part of the Cache class, these module-level functions work with the cache:
+
+### enable_cache()
+
+Shorthand for `Cache.enable_cache()`:
+
+```python
+import fastf1
+
+fastf1.enable_cache('path/to/cache')
+# Equivalent to:
+# fastf1.Cache.enable_cache('path/to/cache')
+```
+
+Available at module level for convenience.
+
+## Examples
+
+### Basic Setup
+
+```python
+import fastf1
+from fastf1 import Cache
+
+# Enable cache - call this first!
+Cache.enable_cache('~/fastf1_cache')
+
+# Load data - will be cached automatically
+session = fastf1.get_session(2023, 5, 'Q')
+session.load()
+
+# Second time is much faster (loaded from cache)
+session2 = fastf1.get_session(2023, 5, 'Q')
+session2.load()  # Fast!
+```
+
+### Force Refresh
+
+```python
+# Ignore cache and re-download everything
+Cache.enable_cache('~/fastf1_cache', force_renew=True)
+
+session = fastf1.get_session(2023, 'Monaco', 'Q')
+session.load()  # Always downloads fresh data
+```
+
+### Temporary Cache Disable
+
+```python
+Cache.enable_cache('~/fastf1_cache')
+
+# Normal cached loading
+session1 = fastf1.get_session(2023, 1, 'Q')
+session1.load()
+
+# Temporarily disable cache
+with Cache.disabled():
+    session2 = fastf1.get_session(2023, 2, 'Q')
+    session2.load()  # Not cached
+
+# Cache is enabled again
+session3 = fastf1.get_session(2023, 3, 'Q')
+session3.load()  # Cached
+```
+
+### Check Cache Size
+
+```python
+path, size = Cache.get_cache_info()
+
+if path:
+    size_gb = size / (1024**3)
+    print(f"Cache location: {path}")
+    print(f"Cache size: {size_gb:.2f} GB")
+    
+    if size_gb > 5:
+        print("Cache is large, consider clearing it")
+        # Cache.clear_cache(deep=True)
+```
+
+### Working Offline
+
+```python
+import fastf1
+from fastf1 import Cache
+
+# First, load data with internet connection
+Cache.enable_cache('~/fastf1_cache')
+session = fastf1.get_session(2023, 'Monaco', 'Q')
+session.load()  # Downloads and caches
+
+# Later, work offline
+Cache.offline_mode(True)
+session = fastf1.get_session(2023, 'Monaco', 'Q')
+session.load()  # Works! Uses cached data
+
+session2 = fastf1.get_session(2023, 'Monza', 'Q')
+session2.load()  # Fails if not previously cached
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Always enable caching">
+    Caching dramatically improves performance and prevents hitting API rate limits. Always call `enable_cache()` at the start of your script.
+    
+    ```python
+    import fastf1
+    
+    # First thing after imports!
+    fastf1.Cache.enable_cache('~/fastf1_cache')
+    ```
+  </Accordion>
+
+  <Accordion title="Use version checking">
+    Keep `ignore_version=False` (default) to avoid loading incompatible cached data after FastF1 updates.
+  </Accordion>
+
+  <Accordion title="Manage cache size">
+    The cache can grow large over time. Periodically check and clear it:
+    
+    ```python
+    path, size = Cache.get_cache_info()
+    if size and size > 10 * 1024**3:  # 10 GB
+        Cache.clear_cache(deep=True)
+    ```
+  </Accordion>
+
+  <Accordion title="Don't commit cache to version control">
+    Add your cache directory to `.gitignore`:
+    
+    ```
+    # .gitignore
+    fastf1_cache/
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Notes
+
+<Note>
+  Cached requests do not count towards API rate limits.
+</Note>
+
+<Note>
+  HTTP cache (stage 1) uses cache control headers and refreshes periodically (every 12 hours by default).
+</Note>
+
+<Warning>
+  Deleting cache files reclaims disk space but means you'll need to re-download data, which takes time and counts towards API rate limits.
+</Warning>
+
+## See Also
+
+- [Caching Guide](/core-concepts/caching) - Detailed caching concepts
+- [Ergast API](/api/ergast) - Uses the cache system
+- [Live Timing](/api/livetiming) - Also benefits from caching

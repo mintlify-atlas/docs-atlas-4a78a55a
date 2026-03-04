@@ -1,0 +1,510 @@
+---
+title: 'Ergast API'
+description: 'Interface to the Ergast F1 historical data API'
+---
+
+## Overview
+
+The Ergast API provides access to historical Formula 1 data from 1950 onwards. FastF1's Ergast interface wraps the [Ergast Developer API](https://ergast.com/mrd/) and provides convenient methods for querying race results, driver standings, lap times, and more.
+
+## Ergast Class
+
+The main interface to the Ergast API.
+
+### Constructor
+
+```python
+from fastf1.ergast import Ergast
+
+ergast = Ergast(
+    result_type='pandas',  # or 'raw'
+    auto_cast=True,
+    limit=None
+)
+```
+
+#### Parameters
+
+<ParamField path="result_type" type="Literal['raw', 'pandas']" default="'pandas'">
+  Determines the default type of the returned result object:
+  - `'raw'`: Returns `ErgastRawResponse` with JSON-like data
+  - `'pandas'`: Returns `ErgastSimpleResponse` or `ErgastMultiResponse` with pandas DataFrames
+</ParamField>
+
+<ParamField path="auto_cast" type="bool" default="True">
+  Whether to automatically cast values from their default string representation to more appropriate types (int, float, datetime, etc.)
+</ParamField>
+
+<ParamField path="limit" type="int | None" default="None">
+  Maximum number of results returned by the API. Defaults to 30 if not set. Maximum: 1000. See [Ergast Response Paging](https://ergast.com/mrd/).
+</ParamField>
+
+## Query Methods
+
+All query methods support filtering by various parameters and return response objects with pagination support.
+
+### get_seasons()
+
+Get a list of seasons.
+
+```python
+result = ergast.get_seasons(
+    circuit='monaco',
+    driver='alonso'
+)
+```
+
+#### Parameters
+
+<ParamField path="circuit" type="str | None">
+  Filter by circuit ID (e.g., 'monaco', 'silverstone')
+</ParamField>
+
+<ParamField path="constructor" type="str | None">
+  Filter by constructor ID (e.g., 'mclaren', 'ferrari')
+</ParamField>
+
+<ParamField path="driver" type="str | None">
+  Filter by driver ID (e.g., 'alonso', 'hamilton')
+</ParamField>
+
+<ParamField path="grid_position" type="int | None">
+  Filter by starting grid position
+</ParamField>
+
+<ParamField path="results_position" type="int | None">
+  Filter by finishing position
+</ParamField>
+
+<ParamField path="fastest_rank" type="int | None">
+  Filter by fastest lap rank
+</ParamField>
+
+<ParamField path="status" type="str | None">
+  Filter by finishing status
+</ParamField>
+
+<ParamField path="result_type" type="Literal['pandas', 'raw'] | None">
+  Override the default result type
+</ParamField>
+
+<ParamField path="auto_cast" type="bool | None">
+  Override the default auto_cast setting
+</ParamField>
+
+<ParamField path="limit" type="int | None">
+  Override the default limit
+</ParamField>
+
+<ParamField path="offset" type="int | None">
+  Offset into the result set for pagination (default: 0)
+</ParamField>
+
+#### Returns
+
+`ErgastSimpleResponse` or `ErgastRawResponse` depending on `result_type`
+
+### get_race_schedule()
+
+Get the race schedule for one or more seasons.
+
+```python
+result = ergast.get_race_schedule(season=2023)
+```
+
+#### Parameters
+
+<ParamField path="season" type="Literal['current'] | int" required>
+  Season year (e.g., 2023) or 'current'
+</ParamField>
+
+<ParamField path="round" type="Literal['last'] | int | None">
+  Round number or 'last'
+</ParamField>
+
+Additional parameters: same as `get_seasons()` (circuit, constructor, driver, etc.)
+
+### get_driver_info()
+
+Get driver information.
+
+```python
+result = ergast.get_driver_info(
+    season=2023,
+    driver='verstappen'
+)
+```
+
+#### Parameters
+
+<ParamField path="season" type="Literal['current'] | int | None">
+  Season year or 'current'
+</ParamField>
+
+<ParamField path="round" type="Literal['last'] | int | None">
+  Round number or 'last'
+</ParamField>
+
+Additional parameters: same as `get_seasons()`
+
+### get_constructor_info()
+
+Get constructor (team) information.
+
+```python
+result = ergast.get_constructor_info(
+    season=2023,
+    constructor='red_bull'
+)
+```
+
+Parameters: same as `get_driver_info()`
+
+### get_circuits()
+
+Get circuit information.
+
+```python
+result = ergast.get_circuits(season=2023)
+```
+
+Parameters: similar to `get_driver_info()` (no circuit parameter)
+
+### get_finishing_status()
+
+Get finishing status codes and descriptions.
+
+```python
+result = ergast.get_finishing_status(season=2023)
+```
+
+Parameters: same as `get_seasons()`
+
+### get_race_results()
+
+Get race results for one or multiple races.
+
+```python
+result = ergast.get_race_results(
+    season=2023,
+    round=5
+)
+```
+
+Parameters: same as `get_race_schedule()`
+
+#### Returns
+
+`ErgastMultiResponse` or `ErgastRawResponse` - contains results for multiple races if filters match multiple events
+
+### get_qualifying_results()
+
+Get qualifying results.
+
+```python
+result = ergast.get_qualifying_results(
+    season=2023,
+    round=5
+)
+```
+
+Parameters: same as `get_race_schedule()`
+
+#### Returns
+
+`ErgastMultiResponse` or `ErgastRawResponse`
+
+### get_sprint_results()
+
+Get sprint race results.
+
+```python
+result = ergast.get_sprint_results(
+    season=2023,
+    round=4
+)
+```
+
+Parameters: same as `get_race_schedule()`
+
+#### Returns
+
+`ErgastMultiResponse` or `ErgastRawResponse`
+
+### get_driver_standings()
+
+Get driver championship standings.
+
+```python
+result = ergast.get_driver_standings(
+    season=2023,
+    round=5
+)
+```
+
+#### Parameters
+
+<ParamField path="season" type="Literal['current'] | int | None">
+  Season year or 'current'
+</ParamField>
+
+<ParamField path="round" type="Literal['last'] | int | None">
+  Round number or 'last'
+</ParamField>
+
+<ParamField path="driver" type="str | None">
+  Filter by driver ID
+</ParamField>
+
+<ParamField path="standings_position" type="int | None">
+  Filter by standings position
+</ParamField>
+
+Additional parameters: circuit, constructor, grid_position, etc.
+
+#### Returns
+
+`ErgastMultiResponse` or `ErgastRawResponse`
+
+### get_constructor_standings()
+
+Get constructor championship standings.
+
+```python
+result = ergast.get_constructor_standings(
+    season=2023,
+    round=5
+)
+```
+
+Parameters: similar to `get_driver_standings()` with `standings_position` filter
+
+#### Returns
+
+`ErgastMultiResponse` or `ErgastRawResponse`
+
+### get_lap_times()
+
+Get lap times for a specific lap.
+
+```python
+result = ergast.get_lap_times(
+    season=2023,
+    round=5,
+    lap_number=10
+)
+```
+
+#### Parameters
+
+<ParamField path="season" type="Literal['current'] | int" required>
+  Season year or 'current'
+</ParamField>
+
+<ParamField path="round" type="Literal['last'] | int" required>
+  Round number or 'last'
+</ParamField>
+
+<ParamField path="lap_number" type="int | None">
+  Specific lap number (if not provided, returns all laps)
+</ParamField>
+
+Additional parameters: driver, constructor, etc.
+
+#### Returns
+
+`ErgastMultiResponse` or `ErgastRawResponse`
+
+### get_pit_stops()
+
+Get pit stop data.
+
+```python
+result = ergast.get_pit_stops(
+    season=2023,
+    round=5,
+    stop_number=1
+)
+```
+
+#### Parameters
+
+<ParamField path="season" type="Literal['current'] | int" required>
+  Season year or 'current'
+</ParamField>
+
+<ParamField path="round" type="Literal['last'] | int" required>
+  Round number or 'last'
+</ParamField>
+
+<ParamField path="stop_number" type="int | None">
+  Filter by pit stop number (1st stop, 2nd stop, etc.)
+</ParamField>
+
+Additional parameters: driver, constructor, etc.
+
+#### Returns
+
+`ErgastMultiResponse` or `ErgastRawResponse`
+
+## Response Objects
+
+All Ergast query methods return response objects that wrap the data and provide pagination support.
+
+### ErgastSimpleResponse
+
+Wraps a pandas DataFrame with additional response metadata.
+
+#### Properties
+
+<ResponseField name="total_results" type="int">
+  Total number of available results for this query
+</ResponseField>
+
+<ResponseField name="is_complete" type="bool">
+  Whether the response contains all available results
+</ResponseField>
+
+#### Methods
+
+<ResponseField name="get_next_result_page()" type="method">
+  Returns the next page of results. Raises `ValueError` if no more pages exist.
+</ResponseField>
+
+<ResponseField name="get_prev_result_page()" type="method">
+  Returns the previous page of results. Raises `ValueError` if already at the first page.
+</ResponseField>
+
+### ErgastMultiResponse
+
+Wraps multiple pandas DataFrames for queries that return data about multiple races/events.
+
+#### Properties
+
+<ResponseField name="description" type="ErgastResultFrame">
+  DataFrame describing each element in `content` (one row per race/event)
+</ResponseField>
+
+<ResponseField name="content" type="list[ErgastResultFrame]">
+  List of DataFrames, one for each race/event. Each contains the detailed data (e.g., all driver results for that race).
+</ResponseField>
+
+<ResponseField name="total_results" type="int">
+  Total number of available results
+</ResponseField>
+
+<ResponseField name="is_complete" type="bool">
+  Whether the response contains all available results
+</ResponseField>
+
+#### Methods
+
+Same pagination methods as `ErgastSimpleResponse`
+
+### ErgastRawResponse
+
+Wraps a list of JSON-like dictionaries with raw API response data.
+
+#### Properties
+
+<ResponseField name="total_results" type="int">
+  Total number of available results
+</ResponseField>
+
+<ResponseField name="is_complete" type="bool">
+  Whether the response contains all available results
+</ResponseField>
+
+#### Methods
+
+Same pagination methods as `ErgastSimpleResponse`
+
+### ErgastResultFrame
+
+A specialized pandas DataFrame that contains Ergast response data with automatic type casting and flattening.
+
+## Examples
+
+### Basic Usage
+
+```python
+from fastf1.ergast import Ergast
+
+ergast = Ergast()
+
+# Get 2023 season race schedule
+schedule = ergast.get_race_schedule(season=2023)
+print(schedule)
+
+# Get race results for Monaco 2023
+results = ergast.get_race_results(season=2023, round=6)
+print(results.description)  # Race info
+print(results.content[0])   # Driver results
+
+# Get driver standings after round 10
+standings = ergast.get_driver_standings(season=2023, round=10)
+print(standings.description)
+print(standings.content[0])
+```
+
+### Filtering
+
+```python
+# Get all seasons where Hamilton won races
+seasons = ergast.get_seasons(
+    driver='hamilton',
+    results_position=1
+)
+
+# Get all pole positions at Monaco
+poles = ergast.get_qualifying_results(
+    circuit='monaco',
+    results_position=1,
+    limit=100
+)
+```
+
+### Pagination
+
+```python
+# Get first page of results (default limit: 30)
+results = ergast.get_race_results(season=2023)
+
+# Check if more pages exist
+if not results.is_complete:
+    # Get next page
+    next_page = results.get_next_result_page()
+    print(f"Total results: {results.total_results}")
+```
+
+### Raw Response
+
+```python
+# Get raw JSON-like data instead of DataFrames
+ergast_raw = Ergast(result_type='raw')
+raw_data = ergast_raw.get_race_results(season=2023, round=1)
+
+# raw_data is a list of dictionaries
+for race in raw_data:
+    print(race['raceName'])
+```
+
+## Notes
+
+<Note>
+  The Ergast API has rate limits:
+  - 4 requests per second (enforced by FastF1)
+  - 200 requests per hour
+  
+  Requests are automatically cached to reduce API calls. Enable caching with `fastf1.Cache.enable_cache()`.
+</Note>
+
+<Warning>
+  The Ergast API is a community-provided service. Be respectful of rate limits and consider caching to minimize requests.
+</Warning>
+
+## See Also
+
+- [Ergast Developer API Documentation](https://ergast.com/mrd/)
+- [Caching](/api/cache) - Learn how to enable caching
+- [Ergast Guide](/guides/ergast-api) - Detailed guide with examples

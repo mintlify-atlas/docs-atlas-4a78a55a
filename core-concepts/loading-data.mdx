@@ -1,0 +1,374 @@
+---
+title: Loading Data
+description: How to load session data including laps, telemetry, weather, and messages
+---
+
+After obtaining a `Session` object, you need to load the actual data using the `load()` method. This page explains the loading process and what data becomes available.
+
+## The load() Method
+
+The `Session.load()` method is the primary way to fetch data from the F1 APIs:
+
+```python
+import fastf1
+
+session = fastf1.get_session(2023, 'Monaco', 'Q')
+session.load()  # Load all available data
+```
+
+### Method Signature
+
+```python
+session.load(
+    *,
+    laps: bool = True,
+    telemetry: bool = True,
+    weather: bool = True,
+    messages: bool = True,
+    livedata: LiveTimingData = None
+)
+```
+
+<ParamField path="laps" type="bool" default="True">
+  Load lap timing data and session status. This includes:
+  - Individual lap times for all drivers
+  - Sector times
+  - Pit stop information
+  - Track status
+  - Session status
+</ParamField>
+
+<ParamField path="telemetry" type="bool" default="True">
+  Load telemetry data including:
+  - Car data (speed, RPM, throttle, brake, gear, DRS)
+  - Position data (X, Y, Z coordinates)
+  - Timing information
+</ParamField>
+
+<ParamField path="weather" type="bool" default="True">
+  Load weather data such as:
+  - Air temperature
+  - Track temperature
+  - Wind speed and direction
+  - Humidity
+  - Rainfall
+</ParamField>
+
+<ParamField path="messages" type="bool" default="True">
+  Load race control messages including:
+  - Track status changes
+  - Penalties
+  - Deleted lap times
+  - Other official race communications
+</ParamField>
+
+<ParamField path="livedata" type="LiveTimingData" default="None">
+  Optional: Use locally saved live timing data instead of fetching from the API
+</ParamField>
+
+## Data Types Available
+
+Depending on which parameters you enable, different data becomes available after loading.
+
+### Selective Loading
+
+You can load only specific types of data to save time:
+
+<CodeGroup>
+
+```python Load Only Lap Times
+# Fast loading - only timing data
+session.load(laps=True, telemetry=False, weather=False, messages=False)
+laps = session.laps
+```
+
+```python Load Only Telemetry
+# Load telemetry without lap timing
+session.load(laps=False, telemetry=True, weather=False, messages=False)
+car_data = session.car_data
+```
+
+```python Load Laps and Weather
+# Combine lap times with weather data
+session.load(laps=True, telemetry=False, weather=True, messages=False)
+laps = session.laps
+weather = session.weather_data
+```
+
+</CodeGroup>
+
+<Note>
+  Loading all data is recommended for full functionality. FastF1 internally mixes data from multiple sources to correct errors and add additional information.
+</Note>
+
+## Available Data After Loading
+
+Once loaded, various properties become accessible:
+
+### Lap Timing Data
+
+Available when `laps=True`:
+
+```python
+session.load(laps=True)
+
+# Access all laps
+laps = session.laps  # Laps object (DataFrame-like)
+
+# Driver list
+drivers = session.drivers  # List of driver numbers as strings
+
+# Session information
+results = session.results  # SessionResults with driver info
+total_laps = session.total_laps  # Total number of laps (race/sprint only)
+
+# Session status and timing
+session_status = session.session_status  # DataFrame
+track_status = session.track_status  # DataFrame
+session_start = session.session_start_time  # Timedelta
+```
+
+### Telemetry Data
+
+Available when `telemetry=True`:
+
+```python
+session.load(telemetry=True)
+
+# Car data by driver number (as strings)
+car_data = session.car_data  # Dict[str, Telemetry]
+ver_car_data = session.car_data['1']  # Verstappen's car data
+
+# Position data by driver number
+pos_data = session.pos_data  # Dict[str, Telemetry]
+ver_pos_data = session.pos_data['1']  # Verstappen's position data
+
+# Reference timestamp
+t0 = session.t0_date  # Timestamp marking start of data stream
+```
+
+### Weather Data
+
+Available when `weather=True`:
+
+```python
+session.load(weather=True)
+
+weather = session.weather_data  # DataFrame with weather measurements
+
+# Weather data columns:
+# - Time: Session time
+# - AirTemp: Air temperature (°C)
+# - TrackTemp: Track temperature (°C) 
+# - Humidity: Relative humidity (%)
+# - Pressure: Air pressure (mbar)
+# - WindSpeed: Wind speed (m/s)
+# - WindDirection: Wind direction (degrees)
+# - Rainfall: Whether it's raining (boolean)
+```
+
+### Race Control Messages
+
+Available when `messages=True`:
+
+```python
+session.load(messages=True)
+
+messages = session.race_control_messages  # DataFrame
+
+# Message data includes:
+# - Time: When the message was sent
+# - Category: Message category
+# - Message: Full message text
+# - Status: Track/session status
+# - Flag: Any flag information
+```
+
+## Data Sources and Backends
+
+FastF1 supports multiple data sources (backends):
+
+### FastF1 Backend (Default)
+
+The default backend provides the most complete data for 2018-present:
+
+```python
+session = fastf1.get_session(2023, 'Monza', 'R', backend='fastf1')
+session.load()
+```
+
+- Full telemetry support
+- Complete timing data
+- Weather information
+- Race control messages
+
+### F1 Timing Backend
+
+Direct access to F1's live timing API:
+
+```python
+session = fastf1.get_session(2023, 'Silverstone', 'Q', backend='f1timing')
+session.load()
+```
+
+- Same data as FastF1 backend
+- Only sessions with live timing available
+- 2018-present
+
+### Ergast Backend
+
+Historical data from the Ergast database:
+
+```python
+session = fastf1.get_session(2005, 'Monaco', 'R', backend='ergast')
+session.load()
+```
+
+- Supports 1950-present
+- **No telemetry data**
+- **No local timestamps**
+- Limited to basic race results and lap times
+
+<Warning>
+  For seasons before 2018, the Ergast backend is used automatically. Telemetry and detailed timing data are not available for these seasons.
+</Warning>
+
+## Understanding Loaded Data
+
+After loading, you can verify what data is available:
+
+```python
+import fastf1
+
+session = fastf1.get_session(2023, 'Spa', 'R')
+session.load()
+
+# Check what's available
+print(f"Number of drivers: {len(session.drivers)}")
+print(f"Drivers: {session.drivers}")
+print(f"Total laps in session: {len(session.laps)}")
+print(f"F1 API support: {session.f1_api_support}")
+
+# Session metadata
+print(f"Session: {session.event.EventName} - {session.name}")
+print(f"Date: {session.date}")
+```
+
+## Live Timing Data
+
+You can save live timing data during a session and replay it later:
+
+```python
+from fastf1.livetiming.data import LiveTimingData
+
+# Save live timing data (during live session)
+livedata = LiveTimingData('path/to/save')
+# ... data is saved automatically ...
+
+# Replay saved data later
+session = fastf1.get_session(2023, 'Monaco', 'Q')
+session.load(livedata=livedata)
+```
+
+This is useful for:
+- Replaying sessions without internet
+- Consistent data for testing
+- Archiving specific sessions
+
+## Performance Considerations
+
+### Loading Time
+
+Loading data can take time, especially for races with full telemetry:
+
+```python
+import time
+
+start = time.time()
+session.load()
+end = time.time()
+print(f"Loading took {end - start:.2f} seconds")
+```
+
+Typical loading times:
+- **Qualifying** (with telemetry): 30-60 seconds
+- **Race** (with telemetry): 60-120 seconds  
+- **Practice** (with telemetry): 40-90 seconds
+
+### Optimization Tips
+
+<Accordion title="Enable Caching">
+  Always enable caching to avoid re-downloading data:
+  
+  ```python
+  import fastf1
+  
+  fastf1.Cache.enable_cache('path/to/cache')
+  session = fastf1.get_session(2023, 'Monaco', 'Q')
+  session.load()  # First load: downloads data
+  
+  # Later...
+  session = fastf1.get_session(2023, 'Monaco', 'Q')
+  session.load()  # Subsequent loads: uses cache, much faster!
+  ```
+  
+  See [Caching](/core-concepts/caching) for more details.
+</Accordion>
+
+<Accordion title="Load Only What You Need">
+  If you only need lap times, skip telemetry:
+  
+  ```python
+  # Much faster - only loads timing data
+  session.load(laps=True, telemetry=False, weather=False, messages=False)
+  ```
+</Accordion>
+
+<Accordion title="Parallel Processing">
+  Load multiple sessions in parallel:
+  
+  ```python
+  from concurrent.futures import ThreadPoolExecutor
+  
+  def load_session(year, gp, identifier):
+      session = fastf1.get_session(year, gp, identifier)
+      session.load()
+      return session
+  
+  with ThreadPoolExecutor(max_workers=3) as executor:
+      sessions = executor.map(
+          lambda args: load_session(*args),
+          [(2023, 1, 'FP1'), (2023, 1, 'FP2'), (2023, 1, 'FP3')]
+      )
+  ```
+</Accordion>
+
+## Error Handling
+
+Some sessions may fail to load or have missing data:
+
+```python
+import fastf1
+from fastf1.exceptions import DataNotLoadedError, NoLapDataError
+
+try:
+    session = fastf1.get_session(2023, 'Monaco', 'Q')
+    session.load()
+    laps = session.laps
+except NoLapDataError:
+    print("No lap data available for this session")
+except Exception as e:
+    print(f"Error loading session: {e}")
+```
+
+<Note>
+  FastF1 uses "soft exceptions" for some errors, logging warnings instead of raising exceptions. Check logs for warnings about missing or incomplete data.
+</Note>
+
+## What's Next?
+
+Now that you know how to load data, explore what you can do with it:
+
+- [Lap Timing](/core-concepts/lap-timing) - Analyze lap times and sector data
+- [Telemetry](/core-concepts/telemetry) - Work with car telemetry data
+- [Caching](/core-concepts/caching) - Speed up data loading with caching

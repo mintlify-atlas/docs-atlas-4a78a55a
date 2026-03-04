@@ -1,0 +1,391 @@
+---
+title: "Events API"
+description: "Reference for FastF1 events module - get sessions, events, and schedules"
+---
+
+The events module provides functions and classes for accessing Formula 1 event and schedule information.
+
+## Functions
+
+### get_session()
+
+Create a Session object based on year, event name and session identifier.
+
+<ParamField path="year" type="int" required>
+  Championship year
+</ParamField>
+
+<ParamField path="gp" type="str | int" required>
+  Name as str or round number as int. If gp is a string, a fuzzy match will be performed on all events and the closest match will be selected. Fuzzy matching uses country, location, name and officialName of each event as reference.
+
+  Examples: 'bahrain', 'australia', 'abudabi', 'monza'
+</ParamField>
+
+<ParamField path="identifier" type="int | str | None" default="None">
+  Session name, abbreviation or number. See event-session-identifier in the documentation.
+</ParamField>
+
+<ParamField path="backend" type="Literal['fastf1', 'f1timing', 'ergast'] | None" default="None">
+  Select a specific backend as data source:
+  - `'fastf1'`: FastF1's own backend, full support for 2018 to now
+  - `'f1timing'`: uses data from the F1 live timing API, sessions for which no timing data is available are not listed (supports 2018 to now)
+  - `'ergast'`: uses data from Ergast, no local times are available (supports 1950 to now)
+
+  When no backend is specified, `'fastf1'` is used as a default and the other backends are used as a fallback. For seasons older than 2018 `'ergast'` is always used.
+</ParamField>
+
+<ParamField path="exact_match" type="bool" default="False">
+  Match precisely the query, or default to fuzzy search.
+</ParamField>
+
+<ResponseField name="return" type="Session">
+  A Session object (without loaded data)
+</ResponseField>
+
+**Example:**
+
+```python
+import fastf1
+
+# Get the second free practice of the first race of 2021
+session = fastf1.get_session(2021, 1, 'FP2')
+
+# Get the qualifying of the 2020 Austrian Grand Prix
+session = fastf1.get_session(2020, 'Austria', 'Qualifying')
+
+# Get the 3rd session of the 5th Grand Prix in 2021
+session = fastf1.get_session(2021, 5, 3)
+```
+
+<Note>
+  This function returns a Session object, but it will not load any session specific data yet. You need to call `Session.load()` on the returned object.
+</Note>
+
+---
+
+### get_event()
+
+Create an Event object for a specific season and GP.
+
+<ParamField path="year" type="int" required>
+  Championship year
+</ParamField>
+
+<ParamField path="gp" type="int | str" required>
+  Name as str or round number as int. If gp is a string, a fuzzy match will be performed on all events. Note that the round number cannot be used to get a testing event, as all testing events are round 0.
+</ParamField>
+
+<ParamField path="backend" type="Literal['fastf1', 'f1timing', 'ergast'] | None" default="None">
+  Select a specific backend as data source (same options as `get_session`)
+</ParamField>
+
+<ParamField path="exact_match" type="bool" default="False">
+  Match precisely the query, or default to fuzzy search.
+</ParamField>
+
+<ResponseField name="return" type="Event">
+  An Event object
+</ResponseField>
+
+**Example:**
+
+```python
+import fastf1
+
+# Get the event for the 2021 Monaco Grand Prix
+event = fastf1.get_event(2021, 'Monaco')
+print(event.EventName)  # 'Monaco Grand Prix'
+```
+
+---
+
+### get_event_schedule()
+
+Create an EventSchedule object for a specific season.
+
+<ParamField path="year" type="int" required>
+  Championship year
+</ParamField>
+
+<ParamField path="include_testing" type="bool" default="True">
+  Include or exclude testing sessions from the event schedule.
+</ParamField>
+
+<ParamField path="backend" type="Literal['fastf1', 'f1timing', 'ergast'] | None" default="None">
+  Select a specific backend as data source (same options as `get_session`)
+</ParamField>
+
+<ResponseField name="return" type="EventSchedule">
+  An EventSchedule object containing all events for the season
+</ResponseField>
+
+**Example:**
+
+```python
+import fastf1
+
+# Get the full schedule for 2023
+schedule = fastf1.get_event_schedule(2023)
+print(schedule)
+
+# Get schedule without testing
+schedule = fastf1.get_event_schedule(2023, include_testing=False)
+```
+
+---
+
+### get_testing_session()
+
+Create a Session object for testing sessions.
+
+<ParamField path="year" type="int" required>
+  Championship year
+</ParamField>
+
+<ParamField path="test_number" type="int" required>
+  Number of the testing event (usually at most two)
+</ParamField>
+
+<ParamField path="session_number" type="int" required>
+  Number of the session within a specific testing event. Each testing event usually has three sessions.
+</ParamField>
+
+<ParamField path="backend" type="Literal['fastf1', 'f1timing'] | None" default="None">
+  Select a specific backend as data source (testing not supported by ergast)
+</ParamField>
+
+<ResponseField name="return" type="Session">
+  A Session object for the testing session
+</ResponseField>
+
+---
+
+### get_events_remaining()
+
+Create an EventSchedule object for remaining events in the season.
+
+<ParamField path="dt" type="datetime.datetime | None" default="None">
+  Optional DateTime to get events after. Defaults to current time.
+</ParamField>
+
+<ParamField path="include_testing" type="bool" default="True">
+  Include or exclude testing sessions from the event schedule.
+</ParamField>
+
+<ParamField path="backend" type="Literal['fastf1', 'f1timing', 'ergast'] | None" default="None">
+  Select a specific backend as data source
+</ParamField>
+
+<ResponseField name="return" type="EventSchedule">
+  An EventSchedule object with upcoming events
+</ResponseField>
+
+---
+
+## Classes
+
+### EventSchedule
+
+DataFrame containing a per-season event schedule.
+
+**Constructor:**
+
+<ParamField path="year" type="int" default="0">
+  Championship year
+</ParamField>
+
+**Available Columns:**
+
+- `RoundNumber` (int): The round number
+- `Country` (str): Country name
+- `Location` (str): City/location name
+- `OfficialEventName` (str): Official event name
+- `EventDate` (datetime64[ns]): Date of the event
+- `EventName` (str): Short event name
+- `EventFormat` (str): Format type ('conventional', 'sprint', 'sprint_shootout', 'sprint_qualifying', 'testing')
+- `Session1` through `Session5` (str): Names of each session
+- `Session1Date` through `Session5Date` (datetime): Local session start times
+- `Session1DateUtc` through `Session5DateUtc` (datetime64[ns]): UTC session start times
+- `F1ApiSupport` (bool): Whether F1 API supports this event
+
+**Methods:**
+
+#### is_testing()
+
+Return True or False, depending on whether each event is a testing event.
+
+<ResponseField name="return" type="pd.Series">
+  Boolean series indicating testing events
+</ResponseField>
+
+#### get_event_by_round()
+
+Get an Event by its round number.
+
+<ParamField path="round" type="int" required>
+  The round number
+</ParamField>
+
+<ResponseField name="return" type="Event">
+  The Event object for that round
+</ResponseField>
+
+#### get_event_by_name()
+
+Get an Event by its name with fuzzy matching.
+
+<ParamField path="name" type="str" required>
+  The name of the event. For example, 'british' or 'silverstone' will both match the British Grand Prix.
+</ParamField>
+
+<ParamField path="exact_match" type="bool" default="False">
+  Search only for exact query matches instead of using fuzzy search.
+</ParamField>
+
+<ResponseField name="return" type="Event">
+  The matched Event object
+</ResponseField>
+
+**Example:**
+
+```python
+import fastf1
+
+schedule = fastf1.get_event_schedule(2023)
+
+# Get event by round
+event = schedule.get_event_by_round(5)
+
+# Get event by name
+event = schedule.get_event_by_name('Monaco')
+
+# Check which events are testing
+testing = schedule[schedule.is_testing()]
+```
+
+---
+
+### Event
+
+Represents a single event (race weekend or testing event).
+
+**Constructor:**
+
+<ParamField path="year" type="int | None" default="None">
+  Championship year
+</ParamField>
+
+**Properties:**
+
+All columns from EventSchedule are available as properties on the Event object.
+
+**Methods:**
+
+#### is_testing()
+
+Return True if this is a testing event.
+
+<ResponseField name="return" type="bool">
+  Whether this is a testing event
+</ResponseField>
+
+#### get_session_name()
+
+Return the full session name of a specific session from this event.
+
+<ParamField path="identifier" type="int | str" required>
+  Session name, abbreviation or number
+</ParamField>
+
+<ResponseField name="return" type="str">
+  Full session name (e.g., 'Practice 3', 'Qualifying')
+</ResponseField>
+
+**Example:**
+
+```python
+event = fastf1.get_event(2021, 1)
+event.get_session_name(3)  # Returns 'Practice 3'
+event.get_session_name('Q')  # Returns 'Qualifying'
+```
+
+#### get_session_date()
+
+Return the date and time at which a specific session is or was held.
+
+<ParamField path="identifier" type="str | int" required>
+  Session name, abbreviation or number
+</ParamField>
+
+<ParamField path="utc" type="bool" default="False">
+  Return a non-timezone-aware UTC timestamp
+</ParamField>
+
+<ResponseField name="return" type="pd.Timestamp">
+  The session date/time
+</ResponseField>
+
+#### get_session()
+
+Return a Session from this event.
+
+<ParamField path="identifier" type="int | str" required>
+  Session name, abbreviation or number
+</ParamField>
+
+<ResponseField name="return" type="Session">
+  The Session object
+</ResponseField>
+
+#### get_race()
+
+Return the race session.
+
+<ResponseField name="return" type="Session">
+  The race Session object
+</ResponseField>
+
+#### get_qualifying()
+
+Return the qualifying session.
+
+<ResponseField name="return" type="Session">
+  The qualifying Session object
+</ResponseField>
+
+#### get_sprint()
+
+Return the sprint session.
+
+<ResponseField name="return" type="Session">
+  The sprint Session object
+</ResponseField>
+
+#### get_practice()
+
+Return the specified practice session.
+
+<ParamField path="number" type="int" required>
+  Practice session number (1, 2, or 3)
+</ParamField>
+
+<ResponseField name="return" type="Session">
+  The practice Session object
+</ResponseField>
+
+**Example:**
+
+```python
+import fastf1
+
+event = fastf1.get_event(2023, 'Monaco')
+
+# Get different sessions
+race = event.get_race()
+quali = event.get_qualifying()
+fp1 = event.get_practice(1)
+
+# Load and work with session data
+race.load()
+print(race.results)
+```

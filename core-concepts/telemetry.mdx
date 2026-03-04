@@ -1,0 +1,546 @@
+---
+title: Telemetry
+description: Working with car telemetry data including speed, throttle, braking, and position
+---
+
+Telemetry data provides detailed information about car performance throughout a session. FastF1 gives you access to channels like speed, RPM, throttle position, gear selection, and car position on track.
+
+## Telemetry Overview
+
+Telemetry data is stored in the `Telemetry` class, which extends pandas DataFrame with specialized methods for working with time-series racing data.
+
+```python
+import fastf1
+
+session = fastf1.get_session(2023, 'Monaco', 'Q')
+session.load()
+
+# Get telemetry for a specific driver
+ver_laps = session.laps.pick_drivers('VER')
+fastest_lap = ver_laps.pick_fastest()
+telemetry = fastest_lap.get_telemetry()
+
+print(telemetry.head())
+```
+
+## Available Telemetry Channels
+
+The `Telemetry` class can contain multiple data channels:
+
+### Car Data Channels
+
+Original data from the F1 API:
+
+<ParamField path="Speed" type="float">
+  Car speed in km/h
+</ParamField>
+
+<ParamField path="RPM" type="float">
+  Engine RPM (revolutions per minute)
+</ParamField>
+
+<ParamField path="nGear" type="int">
+  Current gear number (1-8)
+</ParamField>
+
+<ParamField path="Throttle" type="float">
+  Throttle pedal position (0-100%)
+  
+  <Note>The value 104 sometimes appears indicating unavailable data, typically when the car is stationary.</Note>
+</ParamField>
+
+<ParamField path="Brake" type="bool">
+  Whether brakes are applied (`True`) or not (`False`)
+</ParamField>
+
+<ParamField path="DRS" type="int">
+  DRS (Drag Reduction System) status:
+  - `0`: DRS not available
+  - `1`: DRS available but not activated  
+  - `2`: DRS available and activated
+  - `3`: DRS active (different detection method)
+</ParamField>
+
+### Position Data Channels
+
+<ParamField path="X" type="float">
+  X coordinate position in 1/10 meters
+</ParamField>
+
+<ParamField path="Y" type="float">
+  Y coordinate position in 1/10 meters
+</ParamField>
+
+<ParamField path="Z" type="float">
+  Z coordinate (elevation) in 1/10 meters
+</ParamField>
+
+<ParamField path="Status" type="str">
+  Position status: `'OnTrack'` or `'OffTrack'`
+</ParamField>
+
+### Timing Channels
+
+Present in both car and position data:
+
+<ParamField path="Time" type="timedelta">
+  Time relative to the start of the data slice (0 = first sample)
+</ParamField>
+
+<ParamField path="SessionTime" type="timedelta">
+  Time elapsed since the start of the session
+</ParamField>
+
+<ParamField path="Date" type="datetime">
+  Full date and time when the sample was created
+</ParamField>
+
+<ParamField path="Source" type="str">
+  How the sample was created:
+  - `'car'`: Original car data sample
+  - `'pos'`: Original position data sample
+  - `'interpolated'`: Artificially created/interpolated sample
+</ParamField>
+
+### Computed Channels
+
+These can be added using methods:
+
+<ParamField path="Distance" type="float">
+  Distance driven since the first sample (meters)
+</ParamField>
+
+<ParamField path="RelativeDistance" type="float">
+  Relative distance from 0.0 (first sample) to 1.0 (last sample)
+</ParamField>
+
+<ParamField path="DifferentialDistance" type="float">
+  Distance driven between consecutive samples (meters)
+</ParamField>
+
+<ParamField path="DriverAhead" type="str">
+  Driver number of the car ahead
+</ParamField>
+
+<ParamField path="DistanceToDriverAhead" type="float">
+  Distance to the car ahead in meters
+</ParamField>
+
+## Accessing Telemetry Data
+
+There are multiple ways to access telemetry:
+
+### From Laps
+
+The most common approach is through lap objects:
+
+<CodeGroup>
+
+```python Single Lap Telemetry
+# Get telemetry for one lap
+lap = session.laps.pick_drivers('VER').pick_fastest()
+telemetry = lap.get_telemetry()
+
+print(f"Samples: {len(telemetry)}")
+print(f"Max speed: {telemetry['Speed'].max():.1f} km/h")
+```
+
+```python Multiple Laps Telemetry
+# Get telemetry for multiple laps
+laps = session.laps.pick_drivers('VER').pick_laps([5, 6, 7])
+telemetry = laps.get_telemetry()
+
+# Telemetry spans all three laps
+print(f"Duration: {telemetry['Time'].max()}")
+```
+
+```python Car Data Only
+# Get just car data (speed, RPM, etc.)
+lap = session.laps.pick_drivers('VER').pick_fastest()
+car_data = lap.get_car_data()
+
+# Faster loading, no position data or computed channels
+print(car_data[['Speed', 'Throttle', 'Brake']].head())
+```
+
+```python Position Data Only
+# Get just position data
+lap = session.laps.pick_drivers('VER').pick_fastest()
+pos_data = lap.get_pos_data()
+
+print(pos_data[['X', 'Y', 'Z', 'Status']].head())
+```
+
+</CodeGroup>
+
+### From Session
+
+Direct access to raw telemetry by driver:
+
+```python
+# Access raw car data by driver number (as string)
+ver_car_data = session.car_data['1']  # Verstappen
+ham_car_data = session.car_data['44']  # Hamilton
+
+# Access raw position data
+ver_pos_data = session.pos_data['1']
+```
+
+## Slicing Telemetry
+
+Telemetry can be sliced by time or lap:
+
+### slice_by_lap()
+
+Slice telemetry to include only data from specific laps:
+
+```python
+telemetry.slice_by_lap(
+    ref_laps: Union[Lap, Laps],
+    pad: int = 0,
+    pad_side: str = 'both',
+    interpolate_edges: bool = False
+) -> Telemetry
+```
+
+<ParamField path="ref_laps" type="Lap | Laps" required>
+  The lap or laps to slice by
+</ParamField>
+
+<ParamField path="pad" type="int" default="0">
+  Number of samples to pad the slice with
+</ParamField>
+
+<ParamField path="pad_side" type="str" default="'both'">
+  Where to add padding: `'both'`, `'before'`, or `'after'`
+</ParamField>
+
+<ParamField path="interpolate_edges" type="bool" default="False">
+  Add interpolated samples at exact start/end times
+</ParamField>
+
+```python
+# Slice full session telemetry by specific laps
+full_telemetry = session.car_data['1']
+laps = session.laps.pick_drivers('VER').pick_laps([10, 11, 12])
+
+sliced = full_telemetry.slice_by_lap(laps, pad=10, interpolate_edges=True)
+```
+
+### slice_by_time()
+
+Slice telemetry by session time:
+
+```python
+telemetry.slice_by_time(
+    start_time: pd.Timedelta,
+    end_time: pd.Timedelta,
+    pad: int = 0,
+    pad_side: str = 'both',
+    interpolate_edges: bool = False
+) -> Telemetry
+```
+
+```python
+import pandas as pd
+
+# Get telemetry from minute 10 to minute 15
+start = pd.Timedelta(minutes=10)
+end = pd.Timedelta(minutes=15)
+
+sliced = telemetry.slice_by_time(start, end)
+```
+
+## Adding Computed Channels
+
+Computed channels add derived data to telemetry:
+
+### add_distance()
+
+Add cumulative distance driven:
+
+```python
+telemetry = lap.get_telemetry()
+telemetry = telemetry.add_distance()
+
+# Now 'Distance' column is available
+print(f"Lap distance: {telemetry['Distance'].max():.0f} meters")
+```
+
+<Note>
+  Distance is calculated by integrating speed over time. Integration error accumulates over long periods, so use this only for single laps or a few laps at a time.
+</Note>
+
+### add_relative_distance()
+
+Add normalized distance (0.0 to 1.0):
+
+```python
+telemetry = telemetry.add_relative_distance()
+
+# RelativeDistance: 0.0 = start, 1.0 = end
+mid_lap = telemetry[telemetry['RelativeDistance'] > 0.5].iloc[0]
+print(f"Speed at mid-lap: {mid_lap['Speed']} km/h")
+```
+
+### add_differential_distance()
+
+Add distance between consecutive samples:
+
+```python
+telemetry = telemetry.add_differential_distance()
+
+# Distance traveled per sample
+print(telemetry['DifferentialDistance'].describe())
+```
+
+### add_driver_ahead()
+
+Add information about the driver ahead:
+
+```python
+telemetry = lap.get_car_data()
+telemetry = telemetry.add_distance()  # Required first
+telemetry = telemetry.add_driver_ahead()
+
+# Check who's ahead and by how much
+for idx, row in telemetry.iterrows():
+    if row['DriverAhead']:
+        print(f"Time: {row['Time']}, Ahead: {row['DriverAhead']}, "
+              f"Gap: {row['DistanceToDriverAhead']:.1f}m")
+```
+
+<Warning>
+  `add_driver_ahead()` should only be used for single laps or a few laps to avoid integration error. Cars in the pit lane are not excluded.
+</Warning>
+
+## Merging Telemetry Channels
+
+Merge telemetry from different sources:
+
+### merge_channels()
+
+```python
+telemetry.merge_channels(
+    other: Union[Telemetry, pd.DataFrame],
+    frequency: int | Literal['original'] | None = None
+) -> Telemetry
+```
+
+Merges two telemetry objects with different time bases:
+
+```python
+# Merge car data and position data
+car_data = lap.get_car_data()
+pos_data = lap.get_pos_data()
+
+merged = car_data.merge_channels(pos_data)
+
+# Now has both car and position channels
+print(merged[['Speed', 'X', 'Y', 'Z']].head())
+```
+
+<ParamField path="other" type="Telemetry | DataFrame" required>
+  The telemetry object to merge with
+</ParamField>
+
+<ParamField path="frequency" type="int | 'original' | None">
+  Resampling frequency:
+  - `'original'`: Keep all timestamps from both sources (recommended)
+  - `int`: Resample to specified frequency in Hz
+  - `None`: Use `Telemetry.TELEMETRY_FREQUENCY` setting
+</ParamField>
+
+<Note>
+  Merging with `frequency='original'` is recommended. It preserves all original data points and only interpolates where necessary. Resampling to a fixed frequency interpolates most values, reducing accuracy.
+</Note>
+
+## Resampling Telemetry
+
+Change the sampling frequency of telemetry:
+
+### resample_channels()
+
+```python
+# Resample to 10 Hz
+resampled = telemetry.resample_channels(rule='100ms')
+
+# Resample to 1 Hz
+resampled = telemetry.resample_channels(rule='1s')
+```
+
+You can also provide custom date references:
+
+```python
+import pandas as pd
+
+# Create custom time points
+custom_times = pd.date_range(
+    start=telemetry['Date'].min(),
+    end=telemetry['Date'].max(),
+    freq='50ms'
+)
+
+resampled = telemetry.resample_channels(new_date_ref=custom_times)
+```
+
+## Practical Examples
+
+### Compare Driver Speed on Fastest Lap
+
+```python
+import matplotlib.pyplot as plt
+import fastf1
+
+session = fastf1.get_session(2023, 'Monza', 'Q')
+session.load()
+
+# Get fastest laps
+ver_lap = session.laps.pick_drivers('VER').pick_fastest()
+ham_lap = session.laps.pick_drivers('HAM').pick_fastest()
+
+# Get telemetry with distance
+ver_tel = ver_lap.get_telemetry().add_distance()
+ham_tel = ham_lap.get_telemetry().add_distance()
+
+# Plot speed vs distance
+fig, ax = plt.subplots()
+ax.plot(ver_tel['Distance'], ver_tel['Speed'], label='VER')
+ax.plot(ham_tel['Distance'], ham_tel['Speed'], label='HAM')
+ax.set_xlabel('Distance (m)')
+ax.set_ylabel('Speed (km/h)')
+ax.legend()
+plt.show()
+```
+
+### Analyze Throttle Application
+
+```python
+# Get car data for fastest lap
+lap = session.laps.pick_drivers('VER').pick_fastest()
+car_data = lap.get_car_data().add_distance()
+
+# Calculate throttle statistics
+full_throttle_pct = (car_data['Throttle'] == 100).sum() / len(car_data) * 100
+partial_throttle = car_data[(car_data['Throttle'] > 0) & (car_data['Throttle'] < 100)]
+
+print(f"Full throttle: {full_throttle_pct:.1f}% of lap")
+print(f"Average throttle: {car_data['Throttle'].mean():.1f}%")
+print(f"Partial throttle samples: {len(partial_throttle)}")
+```
+
+### Find Braking Zones
+
+```python
+# Identify where brakes are applied
+car_data = lap.get_car_data().add_distance()
+braking = car_data[car_data['Brake'] == True]
+
+# Find distinct braking zones (gap > 100m between zones)
+braking_zones = []
+current_zone = None
+
+for idx, row in braking.iterrows():
+    if current_zone is None:
+        current_zone = {'start': row['Distance'], 'end': row['Distance']}
+    elif row['Distance'] - current_zone['end'] > 100:
+        braking_zones.append(current_zone)
+        current_zone = {'start': row['Distance'], 'end': row['Distance']}
+    else:
+        current_zone['end'] = row['Distance']
+
+if current_zone:
+    braking_zones.append(current_zone)
+
+print(f"Found {len(braking_zones)} braking zones:")
+for i, zone in enumerate(braking_zones, 1):
+    print(f"  Zone {i}: {zone['start']:.0f}m - {zone['end']:.0f}m")
+```
+
+### Track Position Visualization
+
+```python
+import matplotlib.pyplot as plt
+
+# Get position data
+pos_data = lap.get_pos_data()
+
+# Plot track shape
+fig, ax = plt.subplots(figsize=(10, 10))
+ax.plot(pos_data['X'], pos_data['Y'], linewidth=2)
+ax.set_aspect('equal')
+ax.set_xlabel('X Position')
+ax.set_ylabel('Y Position')
+ax.set_title('Track Layout')
+plt.show()
+```
+
+## Advanced: Custom Telemetry Channels
+
+Register custom channels for automatic interpolation:
+
+```python
+from fastf1.core import Telemetry
+
+# Register a new continuous channel
+Telemetry.register_new_channel(
+    name='MyCustomSpeed',
+    signal_type='continuous',
+    interpolation_method='linear'
+)
+
+# Register a discrete channel
+Telemetry.register_new_channel(
+    name='MyFlag',
+    signal_type='discrete',
+    interpolation_method=None
+)
+```
+
+Signal types:
+- `'continuous'`: Speed, distance, etc. (requires interpolation method)
+- `'discrete'`: Gear, DRS, flags, etc. (uses forward-fill)
+- `'excluded'`: Channel ignored during resampling
+
+## Performance Tips
+
+<Accordion title="Use Car Data When Position Not Needed">
+  `get_car_data()` is faster than `get_telemetry()` if you don't need position data:
+  
+  ```python
+  # Faster - only car channels
+  car_data = lap.get_car_data()
+  
+  # Slower - merges car and position data
+  telemetry = lap.get_telemetry()
+  ```
+</Accordion>
+
+<Accordion title="Add Channels Selectively">
+  Only add computed channels you actually need:
+  
+  ```python
+  # Only add distance if you need it
+  tel = lap.get_car_data()
+  if need_distance:
+      tel = tel.add_distance()
+  ```
+</Accordion>
+
+<Accordion title="Avoid Multiple Resampling">
+  Resample only once from original data to preserve accuracy:
+  
+  ```python
+  # Good: one resampling step
+  resampled = original.resample_channels(rule='100ms')
+  
+  # Bad: multiple resampling loses accuracy
+  temp = original.resample_channels(rule='100ms')
+  final = temp.resample_channels(rule='200ms')
+  ```
+</Accordion>
+
+## Related Topics
+
+- [Lap Timing](/core-concepts/lap-timing) - Combine telemetry with lap timing data
+- [Loading Data](/core-concepts/loading-data) - Understanding telemetry loading options

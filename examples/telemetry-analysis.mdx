@@ -1,0 +1,281 @@
+---
+title: Telemetry Analysis Examples
+description: Analyze driver telemetry data including speed traces, GPS positions, and gear shifts
+---
+
+FastF1 provides comprehensive telemetry data for detailed analysis of driver performance. These examples demonstrate how to visualize and compare telemetry data.
+
+## Speed Traces
+
+Compare two drivers' fastest laps by overlaying their speed traces throughout the lap.
+
+```python
+import matplotlib.pyplot as plt
+import fastf1.plotting
+
+# Enable Matplotlib patches for plotting timedelta values and load
+# FastF1's dark color scheme
+fastf1.plotting.setup_mpl(mpl_timedelta_support=True, color_scheme='fastf1')
+
+# load a session and its telemetry data
+session = fastf1.get_session(2021, 'Spanish Grand Prix', 'Q')
+session.load()
+
+# Select the two laps that we want to compare
+ver_lap = session.laps.pick_drivers('VER').pick_fastest()
+ham_lap = session.laps.pick_drivers('HAM').pick_fastest()
+
+# Get the telemetry data for each lap and add distance column
+ver_tel = ver_lap.get_car_data().add_distance()
+ham_tel = ham_lap.get_car_data().add_distance()
+
+# Create the plot with team colors
+rbr_color = fastf1.plotting.get_team_color(ver_lap['Team'], session=session)
+mer_color = fastf1.plotting.get_team_color(ham_lap['Team'], session=session)
+
+fig, ax = plt.subplots()
+ax.plot(ver_tel['Distance'], ver_tel['Speed'], color=rbr_color, label='VER')
+ax.plot(ham_tel['Distance'], ham_tel['Speed'], color=mer_color, label='HAM')
+
+ax.set_xlabel('Distance in m')
+ax.set_ylabel('Speed in km/h')
+ax.legend()
+plt.suptitle(f"Fastest Lap Comparison \n "
+             f"{session.event['EventName']} {session.event.year} Qualifying")
+
+plt.show()
+```
+
+### What This Example Shows
+
+- Loading qualifying session data
+- Selecting fastest laps for specific drivers
+- Extracting and adding distance data to telemetry
+- Using team colors for styling
+- Plotting multiple speed traces for comparison
+
+### Expected Output
+
+A line plot showing speed (km/h) vs distance (m) for both drivers, with team-colored lines showing where each driver brakes, accelerates, and reaches top speed.
+
+## Speed Visualization on Track
+
+Visualize speed variations on the track map using a color gradient.
+
+```python
+import matplotlib as mpl
+import numpy as np
+from matplotlib import pyplot as plt
+from matplotlib.collections import LineCollection
+import fastf1 as ff1
+
+# Define variables
+year = 2021
+wknd = 9
+ses = 'R'
+driver = 'RIC'
+colormap = mpl.cm.plasma
+
+# Load the session and select the desired data
+session = ff1.get_session(year, wknd, ses)
+weekend = session.event
+session.load()
+lap = session.laps.pick_drivers(driver).pick_fastest()
+
+# Get telemetry data
+x = lap.telemetry['X']              # values for x-axis
+y = lap.telemetry['Y']              # values for y-axis
+color = lap.telemetry['Speed']      # value to base color gradient on
+
+# Create line segments for coloring
+points = np.array([x, y]).T.reshape(-1, 1, 2)
+segments = np.concatenate([points[:-1], points[1:]], axis=1)
+
+# Create the plot
+fig, ax = plt.subplots(sharex=True, sharey=True, figsize=(12, 6.75))
+fig.suptitle(f'{weekend.name} {year} - {driver} - Speed', size=24, y=0.97)
+
+plt.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.12)
+ax.axis('off')
+
+# Create background track line
+ax.plot(lap.telemetry['X'], lap.telemetry['Y'],
+        color='black', linestyle='-', linewidth=16, zorder=0)
+
+# Create a continuous norm to map from data points to colors
+norm = plt.Normalize(color.min(), color.max())
+lc = LineCollection(segments, cmap=colormap, norm=norm,
+                    linestyle='-', linewidth=5)
+lc.set_array(color)
+line = ax.add_collection(lc)
+
+# Add color bar as legend
+cbaxes = fig.add_axes([0.25, 0.05, 0.5, 0.05])
+normlegend = mpl.colors.Normalize(vmin=color.min(), vmax=color.max())
+legend = mpl.colorbar.ColorbarBase(cbaxes, norm=normlegend, cmap=colormap,
+                                   orientation="horizontal")
+
+plt.show()
+```
+
+### What This Example Shows
+
+- Loading GPS coordinates (X, Y) from telemetry
+- Creating colored line segments based on speed
+- Using `LineCollection` for gradient coloring
+- Creating a track map visualization
+- Adding a color bar legend
+
+### Expected Output
+
+A track map showing the circuit layout colored by speed, with slower sections (braking zones) in one color and faster sections (straights) in another.
+
+## Corner Annotations
+
+Annotate speed traces with corner numbers and positions.
+
+```python
+import matplotlib.pyplot as plt
+import fastf1.plotting
+
+fastf1.plotting.setup_mpl(mpl_timedelta_support=True, color_scheme='fastf1')
+
+# Load session data
+session = fastf1.get_session(2021, 'Spanish Grand Prix', 'Q')
+session.load()
+
+# Select the fastest lap and get car telemetry
+fastest_lap = session.laps.pick_fastest()
+car_data = fastest_lap.get_car_data().add_distance()
+
+# Load circuit info with corner locations
+circuit_info = session.get_circuit_info()
+
+# Create the plot
+team_color = fastf1.plotting.get_team_color(fastest_lap['Team'],
+                                            session=session)
+
+fig, ax = plt.subplots()
+ax.plot(car_data['Distance'], car_data['Speed'],
+        color=team_color, label=fastest_lap['Driver'])
+
+# Draw vertical lines at each corner
+v_min = car_data['Speed'].min()
+v_max = car_data['Speed'].max()
+ax.vlines(x=circuit_info.corners['Distance'], ymin=v_min-20, ymax=v_max+20,
+          linestyles='dotted', colors='grey')
+
+# Plot corner numbers
+for _, corner in circuit_info.corners.iterrows():
+    txt = f"{corner['Number']}{corner['Letter']}"
+    ax.text(corner['Distance'], v_min-30, txt,
+            va='center_baseline', ha='center', size='small')
+
+ax.set_xlabel('Distance in m')
+ax.set_ylabel('Speed in km/h')
+ax.legend()
+ax.set_ylim([v_min - 40, v_max + 20])
+
+plt.show()
+```
+
+### What This Example Shows
+
+- Using `get_circuit_info()` to access corner data
+- Plotting vertical lines at corner positions
+- Adding text annotations for corner numbers
+- Adjusting plot limits to accommodate annotations
+
+### Expected Output
+
+A speed trace with vertical dotted lines marking each corner and numbered labels showing which corner is which.
+
+## Gear Shifts
+
+Visualize which gear is being used at each point on the track.
+
+```python
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib import colormaps
+from matplotlib.collections import LineCollection
+import fastf1
+
+# Load session data
+session = fastf1.get_session(2021, 'Austrian Grand Prix', 'Q')
+session.load()
+
+lap = session.laps.pick_fastest()
+tel = lap.get_telemetry()
+
+# Prepare data for plotting
+x = np.array(tel['X'].values)
+y = np.array(tel['Y'].values)
+
+points = np.array([x, y]).T.reshape(-1, 1, 2)
+segments = np.concatenate([points[:-1], points[1:]], axis=1)
+gear = tel['nGear'].to_numpy().astype(float)
+
+# Create line collection with segmented colormap
+cmap = colormaps['Paired']
+lc_comp = LineCollection(segments, norm=plt.Normalize(1, cmap.N+1), cmap=cmap)
+lc_comp.set_array(gear)
+lc_comp.set_linewidth(4)
+
+# Create the plot
+plt.gca().add_collection(lc_comp)
+plt.axis('equal')
+plt.tick_params(labelleft=False, left=False, labelbottom=False, bottom=False)
+
+title = plt.suptitle(
+    f"Fastest Lap Gear Shift Visualization\n"
+    f"{lap['Driver']} - {session.event['EventName']} {session.event.year}"
+)
+
+# Add colorbar with gear numbers
+cbar = plt.colorbar(mappable=lc_comp, label="Gear",
+                    boundaries=np.arange(1, 10))
+cbar.set_ticks(np.arange(1.5, 9.5))
+cbar.set_ticklabels(np.arange(1, 9))
+
+plt.show()
+```
+
+### What This Example Shows
+
+- Accessing gear data (`nGear`) from telemetry
+- Creating a segmented colormap for discrete values
+- Plotting gear usage on the track map
+- Customizing colorbar ticks for discrete data
+
+### Expected Output
+
+A track map colored by gear number, showing where drivers use each gear throughout the lap. Low gears appear in corners, high gears on straights.
+
+## Key Concepts
+
+### Telemetry Data Fields
+
+FastF1 provides access to various telemetry channels:
+- `Speed`: Speed in km/h
+- `RPM`: Engine RPM
+- `nGear`: Current gear (1-8)
+- `Throttle`: Throttle position (0-100%)
+- `Brake`: Brake pressure
+- `DRS`: DRS status
+- `X`, `Y`, `Z`: GPS coordinates
+
+### Adding Distance
+
+The `add_distance()` method calculates the distance traveled from the start of the lap, making it easier to align data from different laps.
+
+### Circuit Information
+
+The `get_circuit_info()` method provides:
+- Corner locations and numbers
+- Track rotation for proper map orientation
+- Circuit-specific metadata
+
+<Note>
+  Telemetry data is only available for sessions from 2018 onwards.
+</Note>

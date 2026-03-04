@@ -1,80 +1,322 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quickstart
+description: Load your first F1 session and access timing data, telemetry, and lap information
 ---
 
-## Get started in three steps
+This guide walks you through loading a Formula 1 session and accessing timing data, telemetry, and lap information.
 
-Get your documentation site running locally and make your first customization.
+## Prerequisites
 
-### Step 1: Set up your local environment
+Ensure FastF1 is installed and the cache is configured:
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
+```bash
+pip install fastf1
+```
+
+## Basic Workflow
+
+<Steps>
+  <Step title="Import and configure cache">
+    Always enable the cache before loading any data to improve performance and avoid rate limits.
     
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
+    ```python
+    import fastf1
     
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
+    # Enable cache - replace with your preferred directory
+    fastf1.Cache.enable_cache('~/fastf1_cache')
+    ```
     
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+    <Warning>
+    Call `Cache.enable_cache()` immediately after imports and before any other FastF1 functionality.
+    </Warning>
+  </Step>
+  
+  <Step title="Load a session">
+    Use `get_session()` to create a session object, then call `load()` to fetch the data.
+    
+    ```python
+    # Get the 2023 Azerbaijan Grand Prix Race session
+    session = fastf1.get_session(2023, 'Azerbaijan', 'R')
+    
+    # Load all session data (timing, telemetry, weather, etc.)
+    session.load()
+    ```
+    
+    <Tip>
+    Session identifiers can be: `'FP1'`, `'FP2'`, `'FP3'`, `'Q'` (Qualifying), `'S'` (Sprint), `'SQ'` (Sprint Qualifying), or `'R'` (Race).
+    </Tip>
+  </Step>
+  
+  <Step title="Access lap data">
+    The `session.laps` DataFrame contains all lap information for all drivers.
+    
+    ```python
+    # Get all laps for a specific driver
+    alonso_laps = session.laps.pick_drivers('ALO')
+    
+    # Filter for quick laps only (removes outliers)
+    quick_laps = alonso_laps.pick_quicklaps()
+    
+    # Get the fastest lap
+    fastest_lap = alonso_laps.pick_fastest()
+    
+    print(f"Fastest lap time: {fastest_lap['LapTime']}")
+    print(f"Lap number: {fastest_lap['LapNumber']}")
+    print(f"Compound: {fastest_lap['Compound']}")
+    ```
+  </Step>
+  
+  <Step title="Access telemetry data">
+    Retrieve high-frequency telemetry data for individual laps.
+    
+    ```python
+    # Get telemetry for the fastest lap
+    telemetry = fastest_lap.get_car_data()
+    
+    # Add distance column for easier analysis
+    telemetry = telemetry.add_distance()
+    
+    # Access telemetry channels
+    print(telemetry[['Distance', 'Speed', 'Throttle', 'Brake', 'nGear']].head())
+    ```
+    
+    Available telemetry channels:
+    - `Speed`: Car speed (km/h)
+    - `RPM`: Engine RPM
+    - `nGear`: Gear number
+    - `Throttle`: Throttle position (0-100%)
+    - `Brake`: Brake applied (boolean)
+    - `DRS`: DRS status
+    - `X`, `Y`, `Z`: GPS position coordinates
+  </Step>
+</Steps>
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+## Complete Example: Lap Time Analysis
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+Here's a complete example that loads a session and analyzes driver lap times:
 
-### Step 3: Go live
+<CodeGroup>
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+```python Basic Analysis
+import fastf1
+import pandas as pd
 
-## Next steps
+# Configure cache
+fastf1.Cache.enable_cache('~/fastf1_cache')
 
-Now that you have your docs running, explore these key features:
+# Load session
+session = fastf1.get_session(2023, 'Azerbaijan', 'R')
+session.load()
+
+# Get laps for a driver
+driver_laps = session.laps.pick_drivers('ALO').pick_quicklaps()
+
+# Display lap time statistics
+print(f"Total laps: {len(driver_laps)}")
+print(f"Fastest lap: {driver_laps['LapTime'].min()}")
+print(f"Average lap time: {driver_laps['LapTime'].mean()}")
+
+# Show compound usage
+compound_usage = driver_laps.groupby('Compound').size()
+print(f"\nCompound usage:\n{compound_usage}")
+```
+
+```python With Visualization
+import fastf1
+import fastf1.plotting
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Setup plotting
+fastf1.plotting.setup_mpl(mpl_timedelta_support=True, color_scheme='fastf1')
+
+# Configure cache and load session
+fastf1.Cache.enable_cache('~/fastf1_cache')
+session = fastf1.get_session(2023, 'Azerbaijan', 'R')
+session.load()
+
+# Get driver laps
+driver_laps = session.laps.pick_drivers('ALO').pick_quicklaps().reset_index()
+
+# Create scatter plot
+fig, ax = plt.subplots(figsize=(10, 6))
+
+sns.scatterplot(
+    data=driver_laps,
+    x='LapNumber',
+    y='LapTime',
+    hue='Compound',
+    palette=fastf1.plotting.get_compound_mapping(session=session),
+    s=80,
+    ax=ax
+)
+
+ax.set_xlabel('Lap Number')
+ax.set_ylabel('Lap Time')
+ax.invert_yaxis()
+plt.title('Alonso Lap Times - 2023 Azerbaijan GP')
+plt.grid(True, alpha=0.3)
+plt.tight_layout()
+plt.show()
+```
+
+```python Telemetry Comparison
+import fastf1
+import fastf1.plotting
+import matplotlib.pyplot as plt
+
+# Setup
+fastf1.plotting.setup_mpl(mpl_timedelta_support=True, color_scheme='fastf1')
+fastf1.Cache.enable_cache('~/fastf1_cache')
+
+# Load session
+session = fastf1.get_session(2021, 'Spanish Grand Prix', 'Q')
+session.load()
+
+# Get fastest laps for two drivers
+ver_lap = session.laps.pick_drivers('VER').pick_fastest()
+ham_lap = session.laps.pick_drivers('HAM').pick_fastest()
+
+# Get telemetry with distance
+ver_tel = ver_lap.get_car_data().add_distance()
+ham_tel = ham_lap.get_car_data().add_distance()
+
+# Get team colors
+rbr_color = fastf1.plotting.get_team_color(ver_lap['Team'], session=session)
+mer_color = fastf1.plotting.get_team_color(ham_lap['Team'], session=session)
+
+# Plot speed comparison
+fig, ax = plt.subplots(figsize=(12, 6))
+ax.plot(ver_tel['Distance'], ver_tel['Speed'], color=rbr_color, label='VER')
+ax.plot(ham_tel['Distance'], ham_tel['Speed'], color=mer_color, label='HAM')
+
+ax.set_xlabel('Distance (m)')
+ax.set_ylabel('Speed (km/h)')
+ax.legend()
+plt.title('Fastest Lap Comparison - Spanish GP 2021 Qualifying')
+plt.grid(True, alpha=0.3)
+plt.tight_layout()
+plt.show()
+```
+
+</CodeGroup>
+
+## Common Data Access Patterns
+
+### Get Session Information
+
+```python
+session = fastf1.get_session(2023, 5, 'Q')
+session.load()
+
+print(f"Event: {session.event['EventName']}")
+print(f"Location: {session.event['Location']}")
+print(f"Date: {session.event['EventDate']}")
+print(f"Session: {session.name}")
+```
+
+### Filter and Select Laps
+
+```python
+# Multiple drivers
+laps = session.laps.pick_drivers(['HAM', 'VER', 'LEC'])
+
+# Specific lap number
+lap_1 = session.laps.pick_laps(1)
+
+# Fastest lap per driver
+fastest_laps = session.laps.pick_fastest()
+
+# Laps on a specific compound
+soft_laps = session.laps[session.laps['Compound'] == 'SOFT']
+```
+
+### Access Results and Classification
+
+```python
+# Get final race results
+results = session.results
+print(results[['DriverNumber', 'Abbreviation', 'TeamName', 'Position']])
+
+# Get weather data
+weather = session.weather_data
+print(weather[['Time', 'AirTemp', 'TrackTemp', 'Rainfall']].head())
+```
+
+## Understanding Session Identifiers
+
+FastF1 accepts multiple formats for identifying sessions:
+
+| Abbreviation | Full Name | Description |
+|--------------|-----------|-------------|
+| `'FP1'` | Practice 1 | First practice session |
+| `'FP2'` | Practice 2 | Second practice session |
+| `'FP3'` | Practice 3 | Third practice session |
+| `'Q'` | Qualifying | Qualifying session |
+| `'S'` | Sprint | Sprint race |
+| `'SQ'` | Sprint Qualifying | Sprint qualifying |
+| `'SS'` | Sprint Shootout | Sprint shootout |
+| `'R'` | Race | Main race |
+
+You can also use:
+- **Session number** (integer): Sessions are numbered in chronological order
+- **Full session name** (string): e.g., `'Qualifying'`, `'Race'`
+
+```python
+# All equivalent ways to get qualifying
+session = fastf1.get_session(2023, 'Monaco', 'Q')
+session = fastf1.get_session(2023, 'Monaco', 'Qualifying')
+session = fastf1.get_session(2023, 'Monaco', 4)  # 4th session of weekend
+```
+
+## Performance Tips
+
+<Tip>
+**Always enable caching** - The first load will download data, but subsequent loads will be nearly instantaneous.
+</Tip>
+
+<Tip>
+**Use pick methods** - Methods like `pick_drivers()`, `pick_fastest()`, and `pick_quicklaps()` are optimized for filtering lap data.
+</Tip>
+
+<Tip>
+**Load only what you need** - If you only need timing data, you can skip telemetry by using `session.load(telemetry=False, weather=False)` for faster loading.
+</Tip>
+
+## Troubleshooting
+
+### Rate Limit Errors
+
+If you encounter rate limit errors, ensure caching is enabled:
+
+```python
+fastf1.Cache.enable_cache('~/fastf1_cache')
+```
+
+FastF1 enforces rate limits:
+- **4 requests/second** (minimum 0.25s between requests)
+- **200 requests/hour** for Ergast API
+- **500 requests/hour** for other APIs
+
+### No Data Available
+
+Some sessions may have incomplete data, especially for older seasons (pre-2018) or testing sessions. Check the session's available data:
+
+```python
+try:
+    session.load()
+except Exception as e:
+    print(f"Error loading session: {e}")
+```
+
+## Next Steps
 
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="API Reference" icon="code" href="/api/session">
+    Explore detailed API documentation for all classes and methods
+  </Card>
+  
+  <Card title="Examples" icon="chart-line" href="/examples/overview">
+    Browse more examples including advanced visualizations and analysis techniques
+  </Card>
 </CardGroup>
-
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>

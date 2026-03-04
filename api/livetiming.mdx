@@ -1,0 +1,549 @@
+---
+title: 'Live Timing'
+description: 'Live timing data streaming and recording'
+---
+
+## Overview
+
+FastF1's live timing module allows you to connect to Formula 1's live timing data stream during sessions and record the data for later analysis. The data is streamed over the SignalR protocol.
+
+<Warning>
+  Live timing data can only be **recorded** during a live session, not used in real-time for analysis. After recording, you can load and analyze the data using FastF1's standard API.
+</Warning>
+
+## SignalRClient
+
+Client for receiving and recording F1 timing data streamed live via SignalR.
+
+### Constructor
+
+```python
+from fastf1.livetiming.client import SignalRClient
+
+client = SignalRClient(
+    filename='session_data.txt',
+    filemode='w',
+    debug=False,
+    timeout=60,
+    logger=None,
+    no_auth=False
+)
+```
+
+#### Parameters
+
+<ParamField path="filename" type="str" required>
+  Filename (optionally with path) for the output file where data will be saved.
+</ParamField>
+
+<ParamField path="filemode" type="str" default="'w'">
+  File mode for writing:
+  - `'w'`: Overwrite existing file
+  - `'a'`: Append to existing file (useful if client restarts during a session)
+</ParamField>
+
+<ParamField path="debug" type="bool" default="False">
+  <Warning>
+    Debug mode is no longer supported and will raise a `ValueError` if set to `True`.
+  </Warning>
+</ParamField>
+
+<ParamField path="timeout" type="int" default="60">
+  Number of seconds after which the client automatically exits when no message data is received. Set to `0` to disable timeout.
+</ParamField>
+
+<ParamField path="logger" type="logging.Logger | None" default="None">
+  Custom logger instance. If `None`, errors are logged to console using default configuration.
+</ParamField>
+
+<ParamField path="no_auth" type="bool" default="False">
+  If `True`, attempts to connect without authentication. May only work for some sessions or return partial/empty data.
+  
+  <Note>
+    Authentication is recommended for complete data access.
+  </Note>
+</ParamField>
+
+### start()
+
+Connect to the live timing stream and start recording data to file.
+
+```python
+client.start()
+```
+
+This method blocks until:
+- The session ends
+- Timeout is reached (if configured)
+- User interrupts with Ctrl+C
+
+#### Example
+
+```python
+from fastf1.livetiming.client import SignalRClient
+
+client = SignalRClient('quali_data.txt')
+try:
+    client.start()
+except KeyboardInterrupt:
+    print("Recording stopped")
+```
+
+### Connection URL and Topics
+
+The client connects to:
+```
+wss://livetiming.formula1.com/signalrcore
+```
+
+And subscribes to these data topics:
+
+- `Heartbeat` - Connection heartbeat
+- `AudioStreams` - Audio stream information  
+- `DriverList` - List of drivers in session
+- `ExtrapolatedClock` - Session time extrapolation
+- `RaceControlMessages` - Race control messages (flags, investigations, etc.)
+- `SessionInfo` - Session metadata
+- `SessionStatus` - Session status (started, finished, etc.)
+- `SessionData` - General session data
+- `TeamRadio` - Team radio messages
+- `TimingAppData` - Timing app data
+- `TimingData` - Lap timing data
+- `TimingStats` - Timing statistics
+- `TrackStatus` - Track status (yellow flags, SC, VSC, red flags)
+- `WeatherData` - Weather information
+- `Position.z` - Car position data (compressed)
+- `CarData.z` - Car telemetry data (compressed)
+- `ContentStreams` - Content stream information
+- `TopThree` - Top 3 classification
+- `RcmSeries` - Race control message series
+- `LapCount` - Current lap count
+
+## LiveTimingData
+
+Data object for loading and accessing recorded live timing data.
+
+### Constructor
+
+```python
+from fastf1.livetiming.data import LiveTimingData
+
+livedata = LiveTimingData(
+    'file1.txt',
+    'file2.txt',
+    'file3.txt'
+)
+```
+
+#### Parameters
+
+<ParamField path="*files" type="str">
+  One or more filenames of recorded live timing data. Files should be in chronological order but may overlap.
+</ParamField>
+
+<Note>
+  If files overlap (e.g., last 5 minutes of file1 match first 5 minutes of file2), duplicates are automatically removed during loading.
+</Note>
+
+### load()
+
+Read all files, parse the data, and organize it by category.
+
+```python
+livedata.load()
+```
+
+<Note>
+  Usually not called manually - automatically invoked when you first call `get()`, `has()`, or `list_categories()`.
+</Note>
+
+### get()
+
+Return data for a specific category.
+
+```python
+data = livedata.get('TimingData')
+```
+
+#### Parameters
+
+<ParamField path="name" type="str" required>
+  Name of the data category (e.g., 'TimingData', 'Position.z', 'WeatherData')
+</ParamField>
+
+#### Returns
+
+List of `[timedelta, message_data]` pairs for that category
+
+<Note>
+  Automatically calls `load()` on first access.
+</Note>
+
+### has()
+
+Check if data exists for a specific category.
+
+```python
+if livedata.has('TeamRadio'):
+    radio_data = livedata.get('TeamRadio')
+```
+
+#### Parameters
+
+<ParamField path="name" type="str" required>
+  Name of the category to check
+</ParamField>
+
+#### Returns
+
+`bool` - `True` if category exists, `False` otherwise
+
+<Note>
+  Automatically calls `load()` on first access.
+</Note>
+
+### list_categories()
+
+List all available data categories in the loaded files.
+
+```python
+categories = livedata.list_categories()
+print(categories)
+```
+
+#### Returns
+
+`list[str]` - List of category names
+
+<Note>
+  Automatically calls `load()` on first access.
+</Note>
+
+### Properties
+
+<ResponseField name="files" type="tuple[str]">
+  Tuple of filenames that were provided to the constructor
+</ResponseField>
+
+<ResponseField name="data" type="dict">
+  Dictionary of parsed data, organized by category. Each category contains a list of `[timedelta, message]` pairs.
+</ResponseField>
+
+<ResponseField name="errorcount" type="int">
+  Number of JSON parsing errors encountered while loading data
+</ResponseField>
+
+## Complete Workflow
+
+### Recording Live Data
+
+```python
+from fastf1.livetiming.client import SignalRClient
+import logging
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+
+# Create client
+client = SignalRClient(
+    filename='2024_monaco_quali.txt',
+    filemode='w',
+    timeout=120  # Exit after 2 min of no data
+)
+
+# Start recording (blocks until session ends or timeout)
+print("Starting live timing recording...")
+print("Press Ctrl+C to stop")
+
+try:
+    client.start()
+except KeyboardInterrupt:
+    print("\nRecording stopped by user")
+
+print("Recording complete!")
+```
+
+### Loading Recorded Data
+
+After recording, load the data with FastF1's standard API:
+
+```python
+import fastf1
+from fastf1.livetiming.data import LiveTimingData
+
+# Create LiveTimingData object
+livedata = LiveTimingData('2024_monaco_quali.txt')
+
+# Load a session using the recorded data
+session = fastf1.get_session(2024, 'Monaco', 'Q')
+session.load(livedata=livedata)
+
+# Now use the session normally
+laps = session.laps
+fastest = laps.pick_fastest()
+print(fastest[['Driver', 'LapTime', 'Team']])
+```
+
+### Multiple Files
+
+If you recorded data in multiple files (e.g., due to connection issues), you can load them all:
+
+```python
+from fastf1.livetiming.data import LiveTimingData
+
+# Files in chronological order
+livedata = LiveTimingData(
+    'quali_part1.txt',
+    'quali_part2.txt',
+    'quali_part3.txt'
+)
+
+# Overlapping data is automatically deduplicated
+session = fastf1.get_session(2024, 'Monaco', 'Q')
+session.load(livedata=livedata)
+```
+
+### Inspecting Data Categories
+
+```python
+from fastf1.livetiming.data import LiveTimingData
+
+livedata = LiveTimingData('session_data.txt')
+
+# List all available categories
+print("Available categories:")
+for cat in livedata.list_categories():
+    print(f"  - {cat}")
+
+# Check for specific data
+if livedata.has('TeamRadio'):
+    radio = livedata.get('TeamRadio')
+    print(f"Found {len(radio)} team radio messages")
+
+# Check for errors
+if livedata.errorcount > 0:
+    print(f"Warning: {livedata.errorcount} parsing errors")
+```
+
+## Advanced Usage
+
+### Custom Logger
+
+```python
+import logging
+from fastf1.livetiming.client import SignalRClient
+
+# Create custom logger
+logger = logging.getLogger('F1LiveTiming')
+logger.setLevel(logging.DEBUG)
+
+handler = logging.FileHandler('livetiming.log')
+handler.setFormatter(
+    logging.Formatter('%(asctime)s - %(levelname)s: %(message)s')
+)
+logger.addHandler(handler)
+
+# Use custom logger
+client = SignalRClient(
+    filename='data.txt',
+    logger=logger
+)
+client.start()
+```
+
+### Append Mode (Resume Recording)
+
+```python
+from fastf1.livetiming.client import SignalRClient
+
+# If client crashes/restarts during session, append to existing file
+client = SignalRClient(
+    filename='session_data.txt',
+    filemode='a',  # Append mode
+    timeout=60
+)
+
+client.start()
+```
+
+### No Authentication (Limited Data)
+
+```python
+from fastf1.livetiming.client import SignalRClient
+
+# Connect without authentication (may return limited data)
+client = SignalRClient(
+    filename='data.txt',
+    no_auth=True
+)
+
+client.start()
+```
+
+## Data Format
+
+Recorded data is saved as text with one message per line:
+
+```json
+["TimingData", {"Lines": {"44": {"Sectors": ...}}}, "2024-05-26T14:23:45.678Z"]
+["WeatherData", {"AirTemp": "23.4", "TrackTemp": "35.2"}, "2024-05-26T14:23:46.123Z"]
+```
+
+Each line is a JSON array with:
+1. Category name (string)
+2. Message data (object)
+3. Timestamp (ISO 8601 string)
+
+<Note>
+  The format is not meant for direct consumption. Use `LiveTimingData` to load and parse it.
+</Note>
+
+## Helper Functions
+
+### messages_from_raw()
+
+Extract data messages from raw recorded SignalR data (debug mode format, no longer used).
+
+```python
+from fastf1.livetiming.client import messages_from_raw
+
+with open('raw_data.txt') as f:
+    raw_data = f.readlines()
+
+messages, error_count = messages_from_raw(raw_data)
+print(f"Extracted {len(messages)} messages")
+print(f"Errors: {error_count}")
+```
+
+#### Parameters
+
+<ParamField path="r" type="Iterable" required>
+  Iterable containing raw SignalR response data
+</ParamField>
+
+#### Returns
+
+`tuple[list, int]` - List of extracted messages and error count
+
+<Note>
+  This is primarily for legacy debug mode data. Modern recordings don't need this.
+</Note>
+
+## Examples
+
+### Basic Live Recording
+
+```python
+from fastf1.livetiming.client import SignalRClient
+
+client = SignalRClient('fp1_data.txt')
+print("Recording FP1... (Ctrl+C to stop)")
+
+try:
+    client.start()
+except KeyboardInterrupt:
+    print("\nStopped")
+```
+
+### Load and Analyze Recorded Data
+
+```python
+import fastf1
+from fastf1.livetiming.data import LiveTimingData
+import matplotlib.pyplot as plt
+
+# Load recorded session
+livedata = LiveTimingData('quali_data.txt')
+session = fastf1.get_session(2024, 'Monaco', 'Q')
+session.load(livedata=livedata)
+
+# Analyze fastest laps
+fastest = session.laps.pick_fastest()
+fastest_tel = fastest.get_telemetry()
+
+# Plot
+plt.plot(fastest_tel['Distance'], fastest_tel['Speed'])
+plt.xlabel('Distance (m)')
+plt.ylabel('Speed (km/h)')
+plt.title(f"Fastest Lap - {fastest['Driver']}")
+plt.show()
+```
+
+### Record with Auto-Timeout
+
+```python
+from fastf1.livetiming.client import SignalRClient
+import logging
+
+logging.basicConfig(
+    format='%(asctime)s - %(levelname)s: %(message)s',
+    level=logging.INFO
+)
+
+# Exit after 90 seconds of no data (session likely ended)
+client = SignalRClient(
+    filename='race_data.txt',
+    timeout=90
+)
+
+print("Recording race data...")
+client.start()  # Auto-exits on timeout
+print("Session completed or timed out")
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Connection fails or returns no data">
+    - Ensure you're connecting during a live F1 session
+    - Try without `no_auth=True` (authentication may be required)
+    - Check your internet connection
+    - Check F1's live timing is actually active
+  </Accordion>
+
+  <Accordion title="Client times out too quickly">
+    Increase the timeout value:
+    
+    ```python
+    client = SignalRClient(
+        filename='data.txt',
+        timeout=300  # 5 minutes
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="High error count when loading">
+    Some parsing errors are normal, but if `errorcount` is very high:
+    - Check if the file was corrupted
+    - Ensure recording completed successfully
+    - Try re-recording the session
+  </Accordion>
+
+  <Accordion title="Loading takes a long time">
+    Loading and parsing live timing data can take time for long sessions. This is normal. The data is automatically cached after the first load.
+  </Accordion>
+</AccordionGroup>
+
+## Notes
+
+<Warning>
+  Live timing data is only available **during** live sessions. You cannot connect to past sessions.
+</Warning>
+
+<Note>
+  Authentication is handled automatically via F1's auth system. You may need to be in a region where F1 TV is available.
+</Note>
+
+<Note>
+  Recorded data can be large for full race sessions (10-100 MB). Ensure you have adequate storage.
+</Note>
+
+<Warning>
+  The SignalR client is not multithreading-safe. Don't run multiple clients simultaneously in threads.
+</Warning>
+
+## See Also
+
+- [Live Timing Guide](/guides/live-timing) - Comprehensive guide with examples
+- [Cache](/api/cache) - Caching works with loaded live timing data
+- [Session](/api/session) - Use `session.load(livedata=...)` to load recorded data

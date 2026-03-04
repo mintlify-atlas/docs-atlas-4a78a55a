@@ -1,0 +1,311 @@
+---
+title: Sessions and Events
+description: Understanding how to access F1 sessions and events using FastF1
+---
+
+FastF1 organizes Formula 1 data around the concepts of **Events** (race weekends) and **Sessions** (individual practice, qualifying, or race sessions). This page covers how to access and work with these fundamental objects.
+
+## Overview
+
+The typical workflow for loading F1 data starts with identifying an event and session:
+
+```python
+import fastf1
+
+# Get a specific session
+session = fastf1.get_session(2021, 'Bahrain', 'Q')
+session.load()
+```
+
+## Getting a Session
+
+The primary entry point is `get_session()`, which returns a `Session` object based on year, event, and session identifier.
+
+### Function: `get_session()`
+
+```python
+fastf1.get_session(
+    year: int,
+    gp: str | int,
+    identifier: int | str | None = None,
+    *,
+    backend: Literal['fastf1', 'f1timing', 'ergast'] | None = None,
+    exact_match: bool = False
+) -> Session
+```
+
+<ParamField path="year" type="int" required>
+  Championship year (e.g., 2021, 2023)
+</ParamField>
+
+<ParamField path="gp" type="str | int" required>
+  Event name as a string or round number as an integer. String matching uses fuzzy search by default.
+  
+  Examples: `'bahrain'`, `'Silverstone'`, `1` (first round)
+</ParamField>
+
+<ParamField path="identifier" type="int | str | None">
+  Session identifier - can be:
+  - Session name: `'Race'`, `'Qualifying'`, `'Practice 1'`
+  - Abbreviation: `'R'`, `'Q'`, `'FP1'`, `'FP2'`, `'FP3'`, `'S'` (Sprint), `'SQ'` (Sprint Qualifying)
+  - Session number: `1`, `2`, `3`, `4`, `5`
+</ParamField>
+
+<ParamField path="backend" type="Literal['fastf1', 'f1timing', 'ergast'] | None">
+  Data source backend:
+  - `'fastf1'`: FastF1's own backend (default, 2018-present)
+  - `'f1timing'`: F1 live timing API (2018-present)
+  - `'ergast'`: Ergast database (1950-present, limited features)
+</ParamField>
+
+<ParamField path="exact_match" type="bool" default="False">
+  If `True`, requires exact event name match instead of fuzzy search
+</ParamField>
+
+### Usage Examples
+
+<CodeGroup>
+
+```python By Session Abbreviation
+# Get the second free practice of the first race of 2021
+session = fastf1.get_session(2021, 1, 'FP2')
+```
+
+```python By Full Session Name
+# Get qualifying for the 2020 Austrian Grand Prix
+session = fastf1.get_session(2020, 'Austria', 'Qualifying')
+```
+
+```python By Session Number
+# Get the 3rd session of the 5th Grand Prix in 2021
+session = fastf1.get_session(2021, 5, 3)
+```
+
+```python With Specific Backend
+# Use Ergast for historical data
+session = fastf1.get_session(1995, 'Monaco', 'R', backend='ergast')
+```
+
+</CodeGroup>
+
+<Note>
+  `get_session()` returns a `Session` object but **does not load any data** yet. You must call `session.load()` to fetch timing, telemetry, and other session-specific data.
+</Note>
+
+## Getting an Event
+
+You can also access the event object directly using `get_event()`.
+
+### Function: `get_event()`
+
+```python
+fastf1.get_event(
+    year: int,
+    gp: int | str,
+    *,
+    backend: Literal['fastf1', 'f1timing', 'ergast'] | None = None,
+    exact_match: bool = False
+) -> Event
+```
+
+Returns an `Event` object representing a complete race weekend.
+
+<ParamField path="year" type="int" required>
+  Championship year
+</ParamField>
+
+<ParamField path="gp" type="int | str" required>
+  Event name (string) or round number (integer)
+</ParamField>
+
+### Event Class
+
+The `Event` class represents a single race weekend and provides methods to access individual sessions.
+
+```python
+import fastf1
+
+# Get the event
+event = fastf1.get_event(2021, 'Bahrain')
+
+# Access event information
+print(event.EventName)          # 'Bahrain Grand Prix'
+print(event.Country)            # 'Bahrain'
+print(event.Location)           # 'Sakhir'
+print(event.RoundNumber)        # 1
+print(event.EventFormat)        # 'conventional' or 'sprint'
+
+# Get specific sessions from the event
+race = event.get_race()
+quali = event.get_qualifying()
+fp1 = event.get_practice(1)
+```
+
+#### Event Methods
+
+<Accordion title="get_session(identifier)">
+  Returns a `Session` object for the specified session.
+  
+  ```python
+  session = event.get_session('Q')
+  session = event.get_session(5)  # Session 5 (usually Race)
+  ```
+</Accordion>
+
+<Accordion title="get_race()">
+  Returns the race session.
+  
+  ```python
+  race = event.get_race()
+  ```
+</Accordion>
+
+<Accordion title="get_qualifying()">
+  Returns the qualifying session.
+  
+  ```python
+  quali = event.get_qualifying()
+  ```
+</Accordion>
+
+<Accordion title="get_sprint()">
+  Returns the sprint session (if applicable).
+  
+  ```python
+  sprint = event.get_sprint()
+  ```
+</Accordion>
+
+<Accordion title="get_practice(number)">
+  Returns the specified practice session.
+  
+  ```python
+  fp1 = event.get_practice(1)
+  fp2 = event.get_practice(2)
+  fp3 = event.get_practice(3)
+  ```
+</Accordion>
+
+<Accordion title="is_testing()">
+  Returns `True` if this is a testing event.
+  
+  ```python
+  if event.is_testing():
+      print("This is a testing event")
+  ```
+</Accordion>
+
+## Event Schedules
+
+### Getting the Event Schedule
+
+```python
+fastf1.get_event_schedule(
+    year: int,
+    *,
+    include_testing: bool = True,
+    backend: Literal['fastf1', 'f1timing', 'ergast'] | None = None
+) -> EventSchedule
+```
+
+Returns an `EventSchedule` object containing all events for a season.
+
+```python
+import fastf1
+
+# Get all events for 2023
+schedule = fastf1.get_event_schedule(2023)
+
+# Access the schedule as a DataFrame
+for index, event in schedule.iterrows():
+    print(f"{event.RoundNumber}: {event.EventName} - {event.Country}")
+
+# Get a specific event from the schedule
+bahrain = schedule.get_event_by_round(1)
+monaco = schedule.get_event_by_name('Monaco')
+```
+
+### EventSchedule Class
+
+The `EventSchedule` class extends pandas DataFrame and provides additional methods:
+
+<Accordion title="get_event_by_round(round)">
+  Get an event by its round number.
+  
+  ```python
+  first_race = schedule.get_event_by_round(1)
+  ```
+</Accordion>
+
+<Accordion title="get_event_by_name(name, exact_match=False)">
+  Get an event by name using fuzzy matching.
+  
+  ```python
+  # Fuzzy matching
+  monza = schedule.get_event_by_name('monza')
+  
+  # Exact matching
+  british = schedule.get_event_by_name('British Grand Prix', exact_match=True)
+  ```
+</Accordion>
+
+<Accordion title="is_testing()">
+  Returns a boolean Series indicating which events are testing events.
+  
+  ```python
+  testing_events = schedule[schedule.is_testing()]
+  ```
+</Accordion>
+
+### Available Event Data
+
+Each event in the schedule contains:
+
+- `RoundNumber` - Round number in the championship
+- `Country` - Country where the event takes place
+- `Location` - Specific location/circuit
+- `EventName` - Short name of the event
+- `OfficialEventName` - Official full name
+- `EventDate` - Date of the event (usually race day)
+- `EventFormat` - Format type: `'conventional'`, `'sprint'`, `'sprint_shootout'`, `'sprint_qualifying'`, or `'testing'`
+- `Session1` through `Session5` - Names of each session
+- `Session1Date` through `Session5Date` - Local timestamps for each session
+- `Session1DateUtc` through `Session5DateUtc` - UTC timestamps for each session
+- `F1ApiSupport` - Whether F1 API data is available
+
+## Testing Sessions
+
+Pre-season testing sessions require special functions:
+
+```python
+# Get a testing event
+test_event = fastf1.get_testing_event(2023, test_number=1)
+
+# Get a specific testing session
+test_session = fastf1.get_testing_session(2023, test_number=1, session_number=1)
+test_session.load()
+```
+
+## Session Object
+
+Once you have a `Session` object, you can access its properties:
+
+```python
+session = fastf1.get_session(2023, 'Monaco', 'Q')
+
+# Session information (available before loading)
+print(session.name)              # 'Qualifying'
+print(session.date)              # pandas.Timestamp of session date
+print(session.event.EventName)   # 'Monaco Grand Prix'
+print(session.f1_api_support)    # True/False
+```
+
+<Warning>
+  Most session data is only available **after** calling `session.load()`. See the [Loading Data](/core-concepts/loading-data) page for details.
+</Warning>
+
+## Related Topics
+
+- [Loading Data](/core-concepts/loading-data) - Learn how to load session data
+- [Lap Timing](/core-concepts/lap-timing) - Working with lap timing data
+- [Telemetry](/core-concepts/telemetry) - Accessing telemetry data

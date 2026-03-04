@@ -1,0 +1,255 @@
+---
+title: 'Logging'
+description: 'Logging configuration and utilities for FastF1'
+---
+
+## Overview
+
+FastF1 uses Python's built-in logging module to provide progress information, warnings, and error messages during data loading and processing. All parts of FastF1 generally log at the INFO level to give users feedback during long-running operations.
+
+## Quick Start
+
+### set_log_level()
+
+```python
+fastf1.set_log_level(level)
+```
+
+Set the log level for all parts of FastF1.
+
+When setting the log level, only messages with this level or with a higher level will be shown.
+
+**Parameters:**
+- `level` (str | int): Either a log level from the logging module (e.g. `logging.INFO`) or the level as a string (e.g. `'WARNING'`)
+
+**Example:**
+```python
+import fastf1
+import logging
+
+# Set log level using logging module constant
+fastf1.set_log_level(logging.WARNING)
+
+# Or use string
+fastf1.set_log_level('WARNING')
+
+# Disable all logging except errors
+fastf1.set_log_level('ERROR')
+
+# Enable all logging including debug messages
+fastf1.set_log_level('DEBUG')
+```
+
+**Available Log Levels:**
+- `'DEBUG'` or `logging.DEBUG` - Detailed information for debugging
+- `'INFO'` or `logging.INFO` - General progress information (default)
+- `'WARNING'` or `logging.WARNING` - Warning messages
+- `'ERROR'` or `logging.ERROR` - Error messages
+- `'CRITICAL'` or `logging.CRITICAL` - Critical errors
+
+## LoggingManager
+
+```python
+class fastf1.logger.LoggingManager
+```
+
+Interface for configuring logging in FastF1.
+
+All submodule loggers in FastF1 are child loggers of the base logger. This class acts as an interface to set the log level for FastF1 and get child loggers.
+
+### Attributes
+
+#### debug
+
+```python
+LoggingManager.debug
+```
+
+Flag for enabling debug mode. When set to `True`, this disables catch-all error handling for data loading methods, allowing exceptions to propagate fully.
+
+**Setting debug mode:**
+```python
+import fastf1
+
+# Enable debug mode
+fastf1.logger.LoggingManager.debug = True
+
+# Or use environment variable
+import os
+os.environ['FASTF1_DEBUG'] = '1'
+```
+
+<Warning>
+  When debug mode is enabled, FastF1 will raise all exceptions instead of handling them gracefully. This is useful for development but may cause data loading to fail completely on errors.
+</Warning>
+
+### Methods
+
+#### get_child()
+
+```python
+LoggingManager.get_child(name)
+```
+
+Return a logger with the given name that is child of the base logger.
+
+**Parameters:**
+- `name` (str): Name of the child logger
+
+**Returns:**
+- `logging.Logger`: Child logger instance
+
+#### set_level()
+
+```python
+LoggingManager.set_level(level)
+```
+
+Set the log level for FastF1.
+
+**Parameters:**
+- `level` (int): Log level, for example `logging.INFO`
+
+<Note>
+  It's recommended to use the top-level `fastf1.set_log_level()` function instead of this method directly.
+</Note>
+
+## Utility Functions
+
+### get_logger()
+
+```python
+fastf1.logger.get_logger(name)
+```
+
+Return a logger with the given name that is a child of FastF1's base logger.
+
+This function is primarily used internally by FastF1 modules to get properly configured logger instances.
+
+**Parameters:**
+- `name` (str): Name for the logger (typically `__name__` of the module)
+
+**Returns:**
+- `logging.Logger`: Child logger instance
+
+**Example:**
+```python
+from fastf1.logger import get_logger
+
+logger = get_logger(__name__)
+logger.info("Processing data...")
+logger.warning("Incomplete data received")
+```
+
+### soft_exceptions()
+
+```python
+fastf1.logger.soft_exceptions(descr_name, msg, logger)
+```
+
+Wrapper method for wrapping any function into catch-all error handling that can be disabled by setting `LoggingManager.debug` to `True`.
+
+This decorator is used internally by FastF1 to wrap data loading functions. With the default configuration, it catches all unhandled exceptions and logs them as warnings, allowing data loading to continue. When debug mode is enabled, exceptions are raised normally.
+
+**Parameters:**
+- `descr_name` (str): Descriptive name for the type of data that should have been loaded
+- `msg` (str): Short message shown as error message to users
+- `logger` (logging.Logger): Logger instance to use for logging errors
+
+**Returns:**
+- Decorator function that can be applied to data loading functions
+
+**Example:**
+```python
+from fastf1.logger import get_logger, soft_exceptions
+
+logger = get_logger(__name__)
+
+@soft_exceptions('lap data', 'Failed to load lap data', logger)
+def load_lap_data():
+    # Load lap data...
+    pass
+```
+
+<Note>
+  The `soft_exceptions` decorator will re-raise `FastF1CriticalError` exceptions even when debug mode is disabled, ensuring critical errors like rate limiting are always surfaced to the user.
+</Note>
+
+## Log Output Format
+
+FastF1 uses a custom log format:
+
+```
+{module: <8} {levelname: >10} \t{message}
+```
+
+**Example output:**
+```
+api          INFO     Loading session data...
+core        WARNING   Incomplete telemetry data
+cache        INFO     Using cached data
+```
+
+## Environment Variables
+
+### FASTF1_DEBUG
+
+Set to `'1'` to enable debug mode.
+
+```bash
+export FASTF1_DEBUG=1
+```
+
+When enabled:
+- A warning is issued: "Debug Mode enabled for Logger!"
+- Catch-all error handling is disabled
+- All exceptions are raised instead of being caught and logged
+
+## Common Use Cases
+
+### Reduce Logging Verbosity
+
+If you find FastF1's logging too verbose:
+
+```python
+import fastf1
+
+# Only show warnings and errors
+fastf1.set_log_level('WARNING')
+```
+
+### Debug Data Loading Issues
+
+When troubleshooting data loading problems:
+
+```python
+import fastf1
+import logging
+
+# Enable debug logging and debug mode
+fastf1.set_log_level('DEBUG')
+fastf1.logger.LoggingManager.debug = True
+
+# Now exceptions will be raised with full tracebacks
+session = fastf1.get_session(2023, 'Monaco', 'R')
+session.load()
+```
+
+### Integrate with Application Logging
+
+To integrate FastF1 logging with your application's logging:
+
+```python
+import logging
+import fastf1
+
+# Configure your application's logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[logging.FileHandler('app.log'), logging.StreamHandler()]
+)
+
+# FastF1 will use your configured handlers
+fastf1.set_log_level('INFO')
+```

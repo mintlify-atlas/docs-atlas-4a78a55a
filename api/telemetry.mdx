@@ -1,0 +1,447 @@
+---
+title: "Telemetry API"
+description: "Reference for FastF1 Telemetry class - access and work with car telemetry data"
+---
+
+The Telemetry class provides access to multi-channel time series telemetry data from Formula 1 cars.
+
+## Telemetry
+
+DataFrame-like object containing multi-channel telemetry data.
+
+**Constructor:**
+
+<ParamField path="session" type="Session | None" default="None">
+  Instance of Session class (required for full functionality)
+</ParamField>
+
+<ParamField path="driver" type="str | None" default="None">
+  Driver number as string (required for full functionality)
+</ParamField>
+
+<ParamField path="drop_unknown_channels" type="bool" default="False">
+  Remove all unknown data channels on initialization
+</ParamField>
+
+---
+
+## Available Channels
+
+### Car Data Channels
+
+- `Speed` (float64): Car speed in km/h
+- `RPM` (float64): Engine RPM
+- `nGear` (int): Current gear number
+- `Throttle` (float64): Throttle pedal position (0-100%). Note: 104 sometimes indicates error/unavailable data.
+- `Brake` (bool): Whether brakes are applied
+- `DRS` (int): DRS status indicator
+
+### Position Data Channels
+
+- `X` (float64): X coordinate position (1/10 meter)
+- `Y` (float64): Y coordinate position (1/10 meter)
+- `Z` (float64): Z coordinate position (1/10 meter)
+- `Status` (str): Track status flag - 'OnTrack' or 'OffTrack'
+
+### Time Channels
+
+- `Time` (timedelta64[ns]): Time elapsed since start of data slice (0 at start)
+- `SessionTime` (timedelta64[ns]): Time elapsed since session start
+- `Date` (datetime64[ns]): Full timestamp for this sample
+
+### Metadata Channels
+
+- `Source` (str): How this sample was created:
+  - 'car': from original car data API
+  - 'pos': from original position data API
+  - 'interpolated': artificially created/interpolated sample
+
+### Computed Channels
+
+These channels can be added using the corresponding `add_*()` methods:
+
+- `Distance` (float64): Distance driven since first sample (meters)
+- `DifferentialDistance` (float64): Distance between samples (meters)
+- `RelativeDistance` (float64): Relative distance (0.0 to 1.0)
+- `DriverAhead` (str): Driver number of car ahead
+- `DistanceToDriverAhead` (float64): Distance to car ahead (meters)
+- `TrackStatus` (int): Track status number
+
+---
+
+## Class Attributes
+
+### TELEMETRY_FREQUENCY
+
+<ResponseField name="type" type="str | int">
+  Defines the frequency used when resampling telemetry data. Either the string 'original' (default) or an integer to specify frequency in Hz.
+</ResponseField>
+
+---
+
+## Slicing Methods
+
+### slice_by_mask()
+
+Slice telemetry using a boolean array as a mask.
+
+<ParamField path="mask" type="list | pd.Series | np.ndarray" required>
+  Array of boolean values with the same length as self
+</ParamField>
+
+<ParamField path="pad" type="int" default="0">
+  Number of samples used for padding the sliced data
+</ParamField>
+
+<ParamField path="pad_side" type="str" default="'both'">
+  Where to pad: 'both', 'before', or 'after'
+</ParamField>
+
+<ResponseField name="return" type="Telemetry">
+  Sliced Telemetry object
+</ResponseField>
+
+---
+
+### slice_by_lap()
+
+Slice telemetry to include only data from specific lap(s).
+
+<ParamField path="ref_laps" type="Lap | Laps" required>
+  The lap or laps to slice by
+</ParamField>
+
+<ParamField path="pad" type="int" default="0">
+  Number of samples for padding
+</ParamField>
+
+<ParamField path="pad_side" type="str" default="'both'">
+  Where to pad: 'both', 'before', or 'after'
+</ParamField>
+
+<ParamField path="interpolate_edges" type="bool" default="False">
+  Add interpolated samples at beginning and end to exactly match time window
+</ParamField>
+
+<ResponseField name="return" type="Telemetry">
+  Sliced Telemetry object
+</ResponseField>
+
+<Note>
+  Requires 'SessionTime' column to be present.
+</Note>
+
+---
+
+### slice_by_time()
+
+Slice telemetry to include only data in a specific time frame.
+
+<ParamField path="start_time" type="pd.Timedelta" required>
+  Start of the time window
+</ParamField>
+
+<ParamField path="end_time" type="pd.Timedelta" required>
+  End of the time window
+</ParamField>
+
+<ParamField path="pad" type="int" default="0">
+  Number of samples for padding
+</ParamField>
+
+<ParamField path="pad_side" type="str" default="'both'">
+  Where to pad: 'both', 'before', or 'after'
+</ParamField>
+
+<ParamField path="interpolate_edges" type="bool" default="False">
+  Add interpolated samples at edges
+</ParamField>
+
+<ResponseField name="return" type="Telemetry">
+  Sliced Telemetry object
+</ResponseField>
+
+---
+
+## Data Manipulation Methods
+
+### merge_channels()
+
+Merge telemetry objects containing different channels.
+
+<ParamField path="other" type="Telemetry | pd.DataFrame" required>
+  Telemetry object to merge with self
+</ParamField>
+
+<ParamField path="frequency" type="int | Literal['original'] | None" default="None">
+  Optional frequency override. Either 'original' or integer for Hz.
+</ParamField>
+
+<ResponseField name="return" type="Telemetry">
+  Merged Telemetry object with all channels
+</ResponseField>
+
+<Note>
+  The two objects don't need a common time base. Data will be merged, optionally resampled, and missing values interpolated.
+</Note>
+
+---
+
+### resample_channels()
+
+Resample telemetry data to a different frequency.
+
+<ParamField path="rule" type="str | None" default="None">
+  Resampling rule for pandas.Series.resample (e.g., '10ms', '100ms')
+</ParamField>
+
+<ParamField path="new_date_ref" type="pd.Series | None" default="None">
+  Alternative: provide a custom Series of new date reference timestamps
+</ParamField>
+
+<ParamField path="**kwargs" type="Any">
+  Additional parameters passed to pandas.Series.resample
+</ParamField>
+
+<ResponseField name="return" type="Telemetry">
+  Resampled Telemetry object
+</ResponseField>
+
+<Note>
+  Specify either 'rule' or 'new_date_ref', not both.
+</Note>
+
+---
+
+### fill_missing()
+
+Calculate missing values using interpolation.
+
+<ResponseField name="return" type="Telemetry">
+  Telemetry object with interpolated values
+</ResponseField>
+
+<Note>
+  Different interpolation methods are used depending on the channel type (linear for continuous values like Speed, forward-fill for discrete values like nGear).
+</Note>
+
+---
+
+## Adding Computed Channels
+
+### add_distance()
+
+Add 'Distance' column containing cumulative distance driven.
+
+<ParamField path="drop_existing" type="bool" default="True">
+  Drop and recalculate if column already exists
+</ParamField>
+
+<ResponseField name="return" type="Telemetry">
+  Self with new 'Distance' column
+</ResponseField>
+
+<Warning>
+  Distance is calculated by integration. Integration error accumulates over long distances. Apply only to single laps or few laps at a time.
+</Warning>
+
+---
+
+### add_differential_distance()
+
+Add 'DifferentialDistance' column with distance between samples.
+
+<ParamField path="drop_existing" type="bool" default="True">
+  Drop and recalculate if column already exists
+</ParamField>
+
+<ResponseField name="return" type="Telemetry">
+  Self with new 'DifferentialDistance' column
+</ResponseField>
+
+---
+
+### add_relative_distance()
+
+Add 'RelativeDistance' column (0.0 at start, 1.0 at end).
+
+<ParamField path="drop_existing" type="bool" default="True">
+  Drop and recalculate if column already exists
+</ParamField>
+
+<ResponseField name="return" type="Telemetry">
+  Self with new 'RelativeDistance' column
+</ResponseField>
+
+---
+
+### add_driver_ahead()
+
+Add 'DriverAhead' and 'DistanceToDriverAhead' columns.
+
+<ParamField path="drop_existing" type="bool" default="True">
+  Drop and recalculate if columns already exist
+</ParamField>
+
+<ResponseField name="return" type="Telemetry">
+  Self with new columns
+</ResponseField>
+
+<Warning>
+  Like add_distance(), this should only be applied to single laps or few laps at a time. Cars in the pit lane are not excluded.
+</Warning>
+
+---
+
+### add_track_status()
+
+Add 'TrackStatus' column with track status for each sample.
+
+<ParamField path="drop_existing" type="bool" default="True">
+  Drop and recalculate if column already exists
+</ParamField>
+
+<ResponseField name="return" type="Telemetry">
+  Self with new 'TrackStatus' column
+</ResponseField>
+
+---
+
+## Calculation Methods
+
+### calculate_differential_distance()
+
+Calculate distance between samples.
+
+<ResponseField name="return" type="pd.Series">
+  Series with differential distance values in meters
+</ResponseField>
+
+---
+
+### integrate_distance()
+
+Calculate cumulative distance from first sample.
+
+<ResponseField name="return" type="pd.Series">
+  Series with distance values in meters
+</ResponseField>
+
+---
+
+### calculate_driver_ahead()
+
+Calculate driver ahead and distance to driver ahead.
+
+<ParamField path="return_reference" type="bool" default="False">
+  Additionally return the reference telemetry slice used for calculation
+</ParamField>
+
+<ResponseField name="return" type="tuple">
+  (driver_ahead: np.ndarray, distance: np.ndarray, [optional: reference_telemetry])
+</ResponseField>
+
+---
+
+## Class Methods
+
+### register_new_channel()
+
+Register a custom telemetry channel for automatic interpolation.
+
+<ParamField path="name" type="str" required>
+  Channel/column name
+</ParamField>
+
+<ParamField path="signal_type" type="str" required>
+  One of 'continuous', 'discrete', or 'excluded'
+</ParamField>
+
+<ParamField path="interpolation_method" type="str | None" default="None">
+  Interpolation method (required for continuous signals). See pandas.Series.interpolate for options.
+</ParamField>
+
+**Example:**
+
+```python
+from fastf1.core import Telemetry
+
+# Register custom channel
+Telemetry.register_new_channel(
+    name='CustomSpeed',
+    signal_type='continuous',
+    interpolation_method='linear'
+)
+```
+
+---
+
+## Complete Usage Example
+
+```python
+import fastf1
+import matplotlib.pyplot as plt
+
+# Load session
+session = fastf1.get_session(2023, 'Monaco', 'Race')
+session.load()
+
+# Get fastest lap
+laps = session.laps.pick_drivers('VER')
+fastest = laps.pick_fastest()
+
+# Get telemetry
+tel = fastest.get_telemetry()
+
+# Add computed channels
+tel = tel.add_distance()
+tel = tel.add_relative_distance()
+tel = tel.add_driver_ahead()
+
+# Basic telemetry plot
+fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(12, 8), sharex=True)
+
+# Speed
+ax1.plot(tel['Distance'], tel['Speed'])
+ax1.set_ylabel('Speed (km/h)')
+ax1.set_title('Verstappen - Fastest Lap Telemetry')
+
+# Throttle and Brake
+ax2.plot(tel['Distance'], tel['Throttle'], label='Throttle')
+ax2.plot(tel['Distance'], tel['Brake'] * 100, label='Brake')
+ax2.set_ylabel('%')
+ax2.legend()
+
+# Gear
+ax3.plot(tel['Distance'], tel['nGear'])
+ax3.set_xlabel('Distance (m)')
+ax3.set_ylabel('Gear')
+
+plt.tight_layout()
+plt.show()
+
+# Slice telemetry for specific section
+t_start = fastest['LapStartTime'] + pd.Timedelta(seconds=10)
+t_end = fastest['LapStartTime'] + pd.Timedelta(seconds=20)
+tel_slice = tel.slice_by_time(t_start, t_end)
+
+print(f"Speed range: {tel_slice['Speed'].min():.1f} - {tel_slice['Speed'].max():.1f} km/h")
+
+# Compare two laps
+ver_lap = laps.pick_fastest()
+ham_laps = session.laps.pick_drivers('HAM')
+ham_lap = ham_laps.pick_fastest()
+
+ver_tel = ver_lap.get_telemetry().add_distance()
+ham_tel = ham_lap.get_telemetry().add_distance()
+
+# Plot comparison
+fig, ax = plt.subplots()
+ax.plot(ver_tel['Distance'], ver_tel['Speed'], label='VER')
+ax.plot(ham_tel['Distance'], ham_tel['Speed'], label='HAM')
+ax.set_xlabel('Distance (m)')
+ax.set_ylabel('Speed (km/h)')
+ax.legend()
+ax.set_title('Speed Comparison - Fastest Laps')
+plt.show()
+```

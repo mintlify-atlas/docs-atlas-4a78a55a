@@ -1,0 +1,558 @@
+---
+title: Caching
+description: Improve performance and reduce API load with FastF1's caching system
+---
+
+FastF1's caching system dramatically improves performance by storing downloaded and processed data locally. This prevents re-downloading the same data and speeds up subsequent runs.
+
+## Why Use Caching?
+
+Without caching:
+- Every script run downloads data from F1 APIs
+- Processing and parsing must be repeated
+- You may hit API rate limits
+- Scripts take much longer to run
+
+With caching enabled:
+- Data is downloaded once and reused
+- Processing is done once and stored
+- Scripts run 10-100x faster after first run
+- Reduced load on F1 APIs
+
+<Note>
+  **It is highly recommended to always enable caching.** The performance improvement is substantial, and it helps prevent exceeding API rate limits.
+</Note>
+
+## Quick Start
+
+Enable caching at the start of your script:
+
+```python
+import fastf1
+
+# Enable cache - create this directory first!
+fastf1.Cache.enable_cache('path/to/cache')
+
+# Now use FastF1 as normal
+session = fastf1.get_session(2023, 'Monaco', 'Q')
+session.load()  # First run: downloads and caches
+```
+
+On subsequent runs with the same data:
+
+```python
+import fastf1
+
+fastf1.Cache.enable_cache('path/to/cache')
+
+session = fastf1.get_session(2023, 'Monaco', 'Q')
+session.load()  # Much faster - uses cached data!
+```
+
+## Enabling the Cache
+
+### enable_cache()
+
+```python
+Cache.enable_cache(
+    cache_dir: str,
+    ignore_version: bool = False,
+    force_renew: bool = False,
+    use_requests_cache: bool = True
+)
+```
+
+<ParamField path="cache_dir" type="str" required>
+  Path to the directory for storing cached data. **The directory must already exist.**
+  
+  Supports:
+  - Absolute paths: `'/home/user/fastf1_cache'`
+  - Home directory: `'~/fastf1_cache'`
+  - Environment variables: `'%LOCALAPPDATA%/fastf1_cache'` (Windows)
+</ParamField>
+
+<ParamField path="ignore_version" type="bool" default="False">
+  If `True`, uses cached data even if it was created with a different FastF1 version.
+  
+  <Warning>Not recommended - incompatible cached data may cause crashes or errors.</Warning>
+</ParamField>
+
+<ParamField path="force_renew" type="bool" default="False">
+  If `True`, ignores all existing cached data and downloads fresh data.
+</ParamField>
+
+<ParamField path="use_requests_cache" type="bool" default="True">
+  Enable caching of raw HTTP requests (stage 1 cache).
+</ParamField>
+
+### Example Usage
+
+<CodeGroup>
+
+```python Basic Usage
+import fastf1
+
+# Enable cache with default settings
+fastf1.Cache.enable_cache('cache')
+```
+
+```python With Home Directory
+import fastf1
+
+# Use home directory expansion
+fastf1.Cache.enable_cache('~/Documents/fastf1_cache')
+```
+
+```python Force Refresh
+import fastf1
+
+# Download fresh data, ignoring cache
+fastf1.Cache.enable_cache('cache', force_renew=True)
+```
+
+```python Windows Example
+import fastf1
+
+# Use Windows environment variable
+fastf1.Cache.enable_cache(r'%LOCALAPPDATA%\fastf1_cache')
+```
+
+</CodeGroup>
+
+## Cache Location
+
+You can specify the cache location in three ways (in order of precedence):
+
+### 1. Explicit Configuration
+
+Call `enable_cache()` with a path:
+
+```python
+import fastf1
+
+fastf1.Cache.enable_cache('/path/to/cache')
+```
+
+### 2. Environment Variable
+
+Set the `FASTF1_CACHE` environment variable:
+
+```bash
+# Linux/macOS
+export FASTF1_CACHE="/home/user/fastf1_cache"
+
+# Windows
+set FASTF1_CACHE=C:\Users\User\fastf1_cache
+```
+
+Then in your script:
+
+```python
+import fastf1
+
+# Automatically uses FASTF1_CACHE environment variable
+session = fastf1.get_session(2023, 'Monaco', 'Q')
+session.load()
+```
+
+### 3. Default Location
+
+If neither is specified, FastF1 uses an OS-dependent default:
+
+<Accordion title="Windows">
+  `%LOCALAPPDATA%\Temp\fastf1`
+  
+  Typically: `C:\Users\YourName\AppData\Local\Temp\fastf1`
+</Accordion>
+
+<Accordion title="macOS">
+  `~/Library/Caches/fastf1`
+  
+  Full path: `/Users/YourName/Library/Caches/fastf1`
+</Accordion>
+
+<Accordion title="Linux">
+  `~/.cache/fastf1` (if `~/.cache` exists)
+  
+  Otherwise: `~/.fastf1`
+</Accordion>
+
+<Warning>
+  When using the default cache location, FastF1 will create the directory automatically and display a warning message.
+</Warning>
+
+## How Caching Works
+
+FastF1 uses a two-stage caching system:
+
+### Stage 1: HTTP Request Cache
+
+Raw GET and POST requests are cached in a SQLite database:
+
+- File: `fastf1_http_cache.sqlite` in the cache directory
+- Caches raw API responses
+- Applies cache control and expiration (12 hours by default)
+- Reduces network requests
+
+### Stage 2: Parsed Data Cache
+
+Processed and parsed data is cached as pickle files:
+
+- Files: `*.ff1pkl` in session-specific subdirectories
+- Caches Python objects after parsing
+- Saves computation time
+- Organized by year/event/session
+
+```
+cache/
+├── fastf1_http_cache.sqlite          # Stage 1: HTTP cache
+└── 2023/                               # Year
+    └── 1/                              # Round number
+        └── Bahrain Grand Prix/         # Event name
+            └── Qualifying/             # Session name
+                ├── timing_data.ff1pkl
+                ├── timing_app_data.ff1pkl
+                └── ...
+```
+
+## Cache Information
+
+Get information about the current cache:
+
+```python
+import fastf1
+
+fastf1.Cache.enable_cache('cache')
+
+# Get cache info
+path, size = fastf1.Cache.get_cache_info()
+
+if path:
+    print(f"Cache location: {path}")
+    print(f"Cache size: {size / (1024**3):.2f} GB")
+else:
+    print("Cache not configured")
+
+# Print cache representation
+print(fastf1.Cache)
+# Output: FastF1 cache (1.23 GB) /path/to/cache
+```
+
+## Managing the Cache
+
+### Clearing the Cache
+
+Delete all cached data:
+
+```python
+import fastf1
+
+# Clear only parsed data (stage 2)
+fastf1.Cache.clear_cache('path/to/cache')
+
+# Clear everything including HTTP cache (stage 1)
+fastf1.Cache.clear_cache('path/to/cache', deep=True)
+```
+
+<Note>
+  You can call `clear_cache()` without enabling the cache first.
+</Note>
+
+### Manual Cache Management
+
+You can manually delete cache files:
+
+```bash
+# Delete cache for a specific session
+rm -rf cache/2023/5/Miami\ Grand\ Prix/Qualifying/
+
+# Delete entire year
+rm -rf cache/2023/
+
+# Delete HTTP cache only
+rm cache/fastf1_http_cache.sqlite
+```
+
+### Cache Size Management
+
+The cache can grow large over time. Typical sizes:
+
+- **Single qualifying session**: 5-15 MB
+- **Single race**: 20-50 MB
+- **Full season (all sessions)**: 3-8 GB
+
+To manage size:
+
+1. Clear old/unused data regularly
+2. Use selective loading (disable telemetry if not needed)
+3. Store cache on a drive with sufficient space
+
+## Temporarily Disabling Cache
+
+Disable caching for specific code sections:
+
+### Using Context Manager
+
+```python
+import fastf1
+
+fastf1.Cache.enable_cache('cache')
+
+# Normal caching
+session1 = fastf1.get_session(2023, 'Monaco', 'Q')
+session1.load()  # Uses cache
+
+# Temporarily disable
+with fastf1.Cache.disabled():
+    session2 = fastf1.get_session(2023, 'Silverstone', 'Q')
+    session2.load()  # No caching
+
+# Caching re-enabled
+session3 = fastf1.get_session(2023, 'Spa', 'Q')
+session3.load()  # Uses cache again
+```
+
+### Manual Control
+
+```python
+import fastf1
+
+fastf1.Cache.enable_cache('cache')
+
+# Disable cache
+fastf1.Cache.set_disabled()
+session = fastf1.get_session(2023, 'Monaco', 'Q')
+session.load()  # No caching
+
+# Re-enable cache
+fastf1.Cache.set_enabled()
+session = fastf1.get_session(2023, 'Spa', 'Q')
+session.load()  # Uses cache
+```
+
+## Offline Mode
+
+Work with cached data without internet:
+
+```python
+import fastf1
+
+fastf1.Cache.enable_cache('cache')
+fastf1.Cache.offline_mode(enabled=True)
+
+# Only cached data will be used
+# No network requests will be made
+session = fastf1.get_session(2023, 'Monaco', 'Q')
+session.load()  # Only works if data is cached
+```
+
+Useful for:
+- Working without internet connection
+- Ensuring reproducible results
+- Preventing accidental data updates
+
+## Performance Benefits
+
+Real-world performance comparison:
+
+### Without Cache
+
+```python
+import fastf1
+import time
+
+# No cache
+start = time.time()
+session = fastf1.get_session(2023, 'Monaco', 'Q')
+session.load()
+end = time.time()
+
+print(f"Loading time: {end - start:.2f} seconds")
+# Output: Loading time: 45.23 seconds
+```
+
+### With Cache (First Run)
+
+```python
+import fastf1
+import time
+
+fastf1.Cache.enable_cache('cache')
+
+start = time.time()
+session = fastf1.get_session(2023, 'Monaco', 'Q')
+session.load()
+end = time.time()
+
+print(f"Loading time: {end - start:.2f} seconds")
+# Output: Loading time: 42.18 seconds (similar to no cache)
+```
+
+### With Cache (Subsequent Runs)
+
+```python
+import fastf1
+import time
+
+fastf1.Cache.enable_cache('cache')
+
+start = time.time()
+session = fastf1.get_session(2023, 'Monaco', 'Q')
+session.load()
+end = time.time()
+
+print(f"Loading time: {end - start:.2f} seconds")
+# Output: Loading time: 1.34 seconds (30x faster!)
+```
+
+## Advanced Features
+
+### CI Mode
+
+For continuous integration environments:
+
+```python
+import fastf1
+
+fastf1.Cache.enable_cache('cache')
+fastf1.Cache.ci_mode(enabled=True)
+
+# In CI mode:
+# - Cached requests are reused even if expired
+# - Each request is made only once and cached forever
+# - Pickle cache (stage 2) is disabled
+# - Good for test reproducibility
+```
+
+### Version Handling
+
+When FastF1 is updated, cached data from older versions may be incompatible:
+
+```python
+import fastf1
+
+# Default: requires matching version
+fastf1.Cache.enable_cache('cache')
+# Cached data from different version will be refreshed
+
+# Ignore version mismatch (not recommended)
+fastf1.Cache.enable_cache('cache', ignore_version=True)
+# Uses cached data regardless of version
+```
+
+## Best Practices
+
+<Accordion title="Always Enable Caching in Scripts">
+  Start every script with cache enablement:
+  
+  ```python
+  import fastf1
+  
+  fastf1.Cache.enable_cache('cache')
+  
+  # Rest of script...
+  ```
+</Accordion>
+
+<Accordion title="Use a Dedicated Cache Directory">
+  Don't mix cache files with your project files:
+  
+  ```python
+  # Good
+  fastf1.Cache.enable_cache('/var/cache/fastf1')
+  
+  # Less ideal
+  fastf1.Cache.enable_cache('./cache')  # Mixed with project
+  ```
+</Accordion>
+
+<Accordion title="Create Cache Directory First">
+  Ensure the directory exists before enabling cache:
+  
+  ```python
+  import os
+  import fastf1
+  
+  cache_dir = 'cache'
+  if not os.path.exists(cache_dir):
+      os.makedirs(cache_dir)
+  
+  fastf1.Cache.enable_cache(cache_dir)
+  ```
+</Accordion>
+
+<Accordion title="Periodically Clear Old Data">
+  Clean up cache for sessions you no longer need:
+  
+  ```python
+  # Clear everything
+  fastf1.Cache.clear_cache('cache', deep=True)
+  
+  # Or manually delete old years
+  # rm -rf cache/2018 cache/2019
+  ```
+</Accordion>
+
+<Accordion title="Monitor Cache Size">
+  Check cache size periodically:
+  
+  ```python
+  path, size = fastf1.Cache.get_cache_info()
+  if size > 10 * 1024**3:  # 10 GB
+      print("Cache is getting large, consider cleaning")
+  ```
+</Accordion>
+
+## Troubleshooting
+
+### Cache Not Working
+
+If caching doesn't seem to work:
+
+1. **Verify directory exists**
+   ```python
+   import os
+   cache_dir = 'path/to/cache'
+   print(f"Exists: {os.path.exists(cache_dir)}")
+   ```
+
+2. **Check cache is enabled**
+   ```python
+   import fastf1
+   fastf1.Cache.enable_cache('cache')
+   path, _ = fastf1.Cache.get_cache_info()
+   print(f"Cache enabled: {path is not None}")
+   ```
+
+3. **Verify files are created**
+   ```bash
+   ls -lh cache/
+   ```
+
+### Version Mismatch Errors
+
+If you see version mismatch warnings:
+
+```python
+# Option 1: Clear cache and download fresh data
+fastf1.Cache.clear_cache('cache', deep=True)
+
+# Option 2: Ignore version (not recommended)
+fastf1.Cache.enable_cache('cache', ignore_version=True)
+```
+
+### Permission Errors
+
+If you get permission errors:
+
+```bash
+# Linux/macOS: Fix permissions
+chmod -R u+w cache/
+
+# Or use a different directory
+```
+
+## Related Topics
+
+- [Loading Data](/core-concepts/loading-data) - Understanding what data is cached
+- [Sessions and Events](/core-concepts/sessions-and-events) - Basic session loading

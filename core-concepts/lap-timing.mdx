@@ -1,0 +1,541 @@
+---
+title: Lap Timing
+description: Working with lap timing data, filtering laps, and analyzing timing information
+---
+
+Lap timing data is the foundation of race analysis in FastF1. The `Laps` and `Lap` classes provide comprehensive timing information for every lap driven in a session.
+
+## Overview
+
+After loading a session, lap timing data is accessible through the `session.laps` property:
+
+```python
+import fastf1
+
+session = fastf1.get_session(2023, 'Monaco', 'Q')
+session.load()
+
+# Access all laps from the session
+laps = session.laps
+print(f"Total laps: {len(laps)}")
+print(f"Drivers: {session.drivers}")
+```
+
+## The Laps Class
+
+The `Laps` class extends pandas DataFrame with specialized methods for filtering and analyzing lap data.
+
+### Available Lap Data
+
+Each lap contains the following information:
+
+<ParamField path="Time" type="timedelta">
+  Session time when the lap was completed
+</ParamField>
+
+<ParamField path="Driver" type="str">
+  Driver's three-letter abbreviation (e.g., 'VER', 'HAM')
+</ParamField>
+
+<ParamField path="DriverNumber" type="str">
+  Driver's number as a string (e.g., '1', '44')
+</ParamField>
+
+<ParamField path="LapTime" type="timedelta">
+  Total lap time
+</ParamField>
+
+<ParamField path="LapNumber" type="float">
+  Lap number in the session
+</ParamField>
+
+<ParamField path="Stint" type="float">
+  Stint number (1, 2, 3, etc.)
+</ParamField>
+
+<ParamField path="PitOutTime" type="timedelta">
+  Session time when the car left the pit lane
+</ParamField>
+
+<ParamField path="PitInTime" type="timedelta">
+  Session time when the car entered the pit lane
+</ParamField>
+
+<ParamField path="Sector1Time" type="timedelta">
+  Sector 1 time
+</ParamField>
+
+<ParamField path="Sector2Time" type="timedelta">
+  Sector 2 time
+</ParamField>
+
+<ParamField path="Sector3Time" type="timedelta">
+  Sector 3 time
+</ParamField>
+
+<ParamField path="Sector1SessionTime" type="timedelta">
+  Session time when Sector 1 was completed
+</ParamField>
+
+<ParamField path="Sector2SessionTime" type="timedelta">
+  Session time when Sector 2 was completed
+</ParamField>
+
+<ParamField path="Sector3SessionTime" type="timedelta">
+  Session time when Sector 3 was completed
+</ParamField>
+
+<ParamField path="SpeedI1" type="float">
+  Speed at intermediate point 1 (km/h)
+</ParamField>
+
+<ParamField path="SpeedI2" type="float">
+  Speed at intermediate point 2 (km/h)
+</ParamField>
+
+<ParamField path="SpeedFL" type="float">
+  Speed at finish line (km/h)
+</ParamField>
+
+<ParamField path="SpeedST" type="float">
+  Speed at speed trap (km/h)
+</ParamField>
+
+<ParamField path="IsPersonalBest" type="bool">
+  Whether this lap is the driver's personal best
+</ParamField>
+
+<ParamField path="Compound" type="str">
+  Tire compound: 'SOFT', 'MEDIUM', 'HARD', 'INTERMEDIATE', 'WET'
+</ParamField>
+
+<ParamField path="TyreLife" type="float">
+  Number of laps completed on this set of tires
+</ParamField>
+
+<ParamField path="FreshTyre" type="bool">
+  Whether the tires are new
+</ParamField>
+
+<ParamField path="Team" type="str">
+  Team name
+</ParamField>
+
+<ParamField path="LapStartTime" type="timedelta">
+  Session time when the lap started
+</ParamField>
+
+<ParamField path="LapStartDate" type="datetime">
+  Absolute date/time when the lap started
+</ParamField>
+
+<ParamField path="TrackStatus" type="str">
+  Track status codes during the lap (e.g., '1' = green, '4' = yellow, '5' = red)
+</ParamField>
+
+<ParamField path="Position" type="float">
+  Race position (for race sessions)
+</ParamField>
+
+<ParamField path="Deleted" type="bool">
+  Whether the lap time was deleted (track limits, etc.)
+</ParamField>
+
+<ParamField path="DeletedReason" type="str">
+  Reason the lap was deleted
+</ParamField>
+
+<ParamField path="FastF1Generated" type="bool">
+  Whether FastF1 generated this lap (e.g., for crashes)
+</ParamField>
+
+<ParamField path="IsAccurate" type="bool">
+  Whether the lap timing is considered accurate
+</ParamField>
+
+## Filtering Laps
+
+The `Laps` class provides several methods to filter and select specific laps:
+
+### pick_drivers()
+
+Select laps from specific driver(s):
+
+```python
+laps.pick_drivers(identifiers: int | str | Iterable[int | str]) -> Laps
+```
+
+<CodeGroup>
+
+```python Single Driver
+# By driver abbreviation
+ver_laps = session.laps.pick_drivers('VER')
+
+# By driver number
+ver_laps = session.laps.pick_drivers(1)
+ham_laps = session.laps.pick_drivers(44)
+```
+
+```python Multiple Drivers
+# Mix of abbreviations and numbers
+some_laps = session.laps.pick_drivers(['VER', 44, 'BOT'])
+
+# Multiple drivers by abbreviation
+top_drivers = session.laps.pick_drivers(['VER', 'HAM', 'LEC'])
+```
+
+</CodeGroup>
+
+### pick_teams()
+
+Select laps from specific team(s):
+
+```python
+laps.pick_teams(names: str | Iterable[str]) -> Laps
+```
+
+```python
+# Single team
+red_bull_laps = session.laps.pick_teams('Red Bull Racing')
+
+# Multiple teams
+top_teams = session.laps.pick_teams(['Red Bull Racing', 'Mercedes', 'Ferrari'])
+```
+
+### pick_laps()
+
+Select specific lap number(s):
+
+```python
+laps.pick_laps(lap_numbers: int | Iterable[int]) -> Laps
+```
+
+```python
+# Single lap
+lap_1 = session.laps.pick_laps(1)
+
+# Multiple laps
+laps_10_to_20 = session.laps.pick_laps(range(10, 21))
+
+# Specific laps
+selected_laps = session.laps.pick_laps([5, 10, 15, 20])
+```
+
+### pick_fastest()
+
+Find the fastest lap:
+
+```python
+laps.pick_fastest(only_by_time: bool = False) -> Lap | None
+```
+
+<ParamField path="only_by_time" type="bool" default="False">
+  If `False`, returns the fastest lap marked as personal best. If `True`, returns the lap with the lowest time regardless of personal best status.
+</ParamField>
+
+```python
+# Get overall fastest lap (marked as personal best)
+fastest = session.laps.pick_fastest()
+
+# Get fastest lap by time (even if deleted)
+fastest_by_time = session.laps.pick_fastest(only_by_time=True)
+
+if fastest:
+    print(f"Fastest: {fastest['Driver']} - {fastest['LapTime']}")
+```
+
+<Note>
+  Returns `None` if no qualifying lap is found (when `only_by_time=False`) or if there are no laps.
+</Note>
+
+### Chaining Filters
+
+Filter methods can be chained together:
+
+```python
+# Get Verstappen's fastest lap
+ver_fastest = session.laps.pick_drivers('VER').pick_fastest()
+
+# Get fastest lap from Red Bull
+rb_fastest = session.laps.pick_teams('Red Bull Racing').pick_fastest()
+
+# Get laps 5-10 for Hamilton
+ham_laps = session.laps.pick_drivers('HAM').pick_laps(range(5, 11))
+
+# Get fastest Mercedes lap on soft tires
+merc_soft = session.laps[
+    (session.laps['Team'] == 'Mercedes') & 
+    (session.laps['Compound'] == 'SOFT')
+].pick_fastest()
+```
+
+## Advanced Filtering
+
+Use pandas operations for custom filtering:
+
+```python
+# Laps faster than 1:30
+fast_laps = session.laps[session.laps['LapTime'] < pd.Timedelta(seconds=90)]
+
+# Laps with yellow flags
+yellow_flag_laps = session.laps[session.laps['TrackStatus'].str.contains('4')]
+
+# Out-laps (first lap after pit stop)
+out_laps = session.laps[~session.laps['PitOutTime'].isna()]
+
+# In-laps (lap ending in pit stop)
+in_laps = session.laps[~session.laps['PitInTime'].isna()]
+
+# Non-deleted laps
+valid_laps = session.laps[session.laps['Deleted'] == False]
+
+# Laps on fresh tires
+fresh_tire_laps = session.laps[session.laps['FreshTyre'] == True]
+```
+
+## Qualifying-Specific Methods
+
+For qualifying sessions, additional methods are available:
+
+### pick_quicklaps()
+
+Select only "quick" laps (within 107% of fastest):
+
+```python
+quick_laps = session.laps.pick_quicklaps()
+
+# Adjust threshold (default is 1.07 for 107% rule)
+Laps.QUICKLAP_THRESHOLD = 1.10
+quick_laps = session.laps.pick_quicklaps()
+```
+
+### split_qualifying_sessions()
+
+Split laps into Q1, Q2, Q3:
+
+```python
+q1, q2, q3 = session.laps.split_qualifying_sessions()
+
+print(f"Q1 laps: {len(q1) if q1 is not None else 0}")
+print(f"Q2 laps: {len(q2) if q2 is not None else 0}")
+print(f"Q3 laps: {len(q3) if q3 is not None else 0}")
+
+# Get fastest lap from Q3
+if q3 is not None:
+    q3_fastest = q3.pick_fastest()
+```
+
+### pick_accurate()
+
+Filter to only accurate laps:
+
+```python
+accurate_laps = session.laps.pick_accurate()
+```
+
+## The Lap Class
+
+A single lap is represented by the `Lap` class (extends pandas Series):
+
+```python
+# Get a single lap
+lap = session.laps.pick_drivers('VER').pick_fastest()
+
+# Access lap properties
+print(f"Driver: {lap['Driver']}")
+print(f"Lap time: {lap['LapTime']}")
+print(f"Compound: {lap['Compound']}")
+print(f"Sector 1: {lap['Sector1Time']}")
+print(f"Sector 2: {lap['Sector2Time']}")
+print(f"Sector 3: {lap['Sector3Time']}")
+```
+
+### Getting Telemetry from a Lap
+
+Each lap can provide its telemetry data:
+
+```python
+lap = session.laps.pick_drivers('VER').pick_fastest()
+
+# Get full telemetry (car + position data merged)
+telemetry = lap.get_telemetry()
+
+# Get only car data (faster)
+car_data = lap.get_car_data()
+
+# Get only position data
+pos_data = lap.get_pos_data()
+```
+
+See the [Telemetry](/core-concepts/telemetry) page for more details.
+
+## Practical Examples
+
+### Compare Fastest Laps
+
+```python
+import fastf1
+import pandas as pd
+
+session = fastf1.get_session(2023, 'Monza', 'Q')
+session.load()
+
+# Get fastest lap for each driver
+fastest_laps = session.laps.groupby('Driver').apply(
+    lambda x: x.loc[x['LapTime'].idxmin()] if len(x) > 0 else None
+).dropna()
+
+# Sort by lap time
+fastest_laps = fastest_laps.sort_values('LapTime')
+
+print("Top 10 Qualifying Results:")
+for idx, (driver, lap) in enumerate(fastest_laps.head(10).iterrows(), 1):
+    print(f"{idx:2d}. {lap['Driver']:3s} - {lap['LapTime']} ({lap['Team']})")
+```
+
+### Analyze Sector Times
+
+```python
+# Find best sectors
+laps = session.laps.pick_drivers('VER')
+
+best_s1 = laps.loc[laps['Sector1Time'].idxmin()]
+best_s2 = laps.loc[laps['Sector2Time'].idxmin()]
+best_s3 = laps.loc[laps['Sector3Time'].idxmin()]
+
+print(f"Best S1: {best_s1['Sector1Time']} (Lap {best_s1['LapNumber']})")
+print(f"Best S2: {best_s2['Sector2Time']} (Lap {best_s2['LapNumber']})")
+print(f"Best S3: {best_s3['Sector3Time']} (Lap {best_s3['LapNumber']})")
+
+# Theoretical best lap
+theoretical_best = (best_s1['Sector1Time'] + 
+                   best_s2['Sector2Time'] + 
+                   best_s3['Sector3Time'])
+print(f"\nTheoretical best: {theoretical_best}")
+print(f"Actual fastest: {laps.pick_fastest()['LapTime']}")
+```
+
+### Tire Strategy Analysis
+
+```python
+session = fastf1.get_session(2023, 'Monaco', 'R')
+session.load()
+
+# Analyze tire compounds used
+for driver in ['VER', 'HAM', 'LEC']:
+    driver_laps = session.laps.pick_drivers(driver)
+    
+    print(f"\n{driver} Tire Strategy:")
+    for stint in driver_laps['Stint'].unique():
+        stint_laps = driver_laps[driver_laps['Stint'] == stint]
+        compound = stint_laps.iloc[0]['Compound']
+        num_laps = len(stint_laps)
+        print(f"  Stint {int(stint)}: {compound:12s} - {num_laps} laps")
+```
+
+### Lap Time Evolution
+
+```python
+import matplotlib.pyplot as plt
+
+laps = session.laps.pick_drivers('VER')
+
+# Convert lap times to seconds for plotting
+lap_times = laps['LapTime'].dt.total_seconds()
+
+plt.figure(figsize=(12, 6))
+plt.plot(laps['LapNumber'], lap_times, marker='o')
+plt.xlabel('Lap Number')
+plt.ylabel('Lap Time (s)')
+plt.title('Verstappen Lap Times')
+plt.grid(True)
+plt.show()
+```
+
+### Weather Impact Analysis
+
+```python
+# Get weather data for each lap
+laps = session.laps.pick_drivers('VER')
+weather = laps.get_weather_data()
+
+# Merge lap times with weather
+analysis = pd.concat([laps[['LapNumber', 'LapTime', 'Compound']], weather], axis=1)
+
+# Find correlation between track temp and lap time
+analysis['LapTimeSeconds'] = analysis['LapTime'].dt.total_seconds()
+correlation = analysis[['LapTimeSeconds', 'TrackTemp']].corr()
+
+print(f"Correlation between track temp and lap time: {correlation.iloc[0, 1]:.3f}")
+```
+
+### Deleted Laps
+
+```python
+# Find all deleted laps
+deleted = session.laps[session.laps['Deleted'] == True]
+
+print(f"Total deleted laps: {len(deleted)}")
+for _, lap in deleted.iterrows():
+    print(f"{lap['Driver']:3s} Lap {lap['LapNumber']:2.0f}: "
+          f"{lap['LapTime']} - {lap['DeletedReason']}")
+```
+
+## Working with Lap Collections
+
+### Accessing Telemetry for Multiple Laps
+
+```python
+# Get telemetry spanning multiple laps
+laps = session.laps.pick_drivers('VER').pick_laps([10, 11, 12])
+telemetry = laps.get_telemetry()
+
+# Telemetry covers all three laps
+print(f"Telemetry duration: {telemetry['Time'].max()}")
+print(f"Total samples: {len(telemetry)}")
+```
+
+### Iterating Over Laps
+
+```python
+laps = session.laps.pick_drivers('VER')
+
+for idx, lap in laps.iterrows():
+    if lap['LapTime'] < pd.Timedelta(seconds=90):
+        print(f"Lap {lap['LapNumber']}: {lap['LapTime']} on {lap['Compound']}")
+```
+
+## Performance Notes
+
+<Accordion title="Filter Before Accessing Telemetry">
+  Always filter laps before getting telemetry to avoid loading unnecessary data:
+  
+  ```python
+  # Good: Filter first, then get telemetry
+  lap = session.laps.pick_drivers('VER').pick_fastest()
+  telemetry = lap.get_telemetry()
+  
+  # Less efficient: Loading telemetry for all laps
+  all_telemetry = session.laps.get_telemetry()  # May fail or be very slow
+  ```
+</Accordion>
+
+<Accordion title="Use Cached Properties">
+  The `telemetry` property is cached, while `get_telemetry()` computes fresh:
+  
+  ```python
+  # Cached - computed once
+  tel1 = lap.telemetry
+  tel2 = lap.telemetry  # Returns same object
+  
+  # Not cached - computed each time
+  tel1 = lap.get_telemetry()
+  tel2 = lap.get_telemetry()  # Computes again
+  ```
+</Accordion>
+
+## Related Topics
+
+- [Telemetry](/core-concepts/telemetry) - Working with telemetry data from laps
+- [Loading Data](/core-concepts/loading-data) - Understanding what data is loaded
+- [Sessions and Events](/core-concepts/sessions-and-events) - Getting session and event objects

@@ -1,0 +1,380 @@
+---
+title: Ergast API Integration
+description: Access historical F1 data using the Ergast class and jolpica-f1 API for seasons, drivers, constructors, and race results
+---
+
+FastF1 includes powerful integration with the Ergast API (now hosted at jolpica-f1) for accessing historical F1 data from 1950 onwards. This includes race results, qualifying data, driver standings, constructor information, and more.
+
+## Overview
+
+The Ergast API provides comprehensive historical F1 data that complements FastF1's detailed telemetry and timing data. Use it to:
+
+- Query historical race results and standings
+- Access driver and constructor information
+- Retrieve qualifying and sprint results
+- Get championship standings for any season
+- Query circuit information and race schedules
+
+<Info>
+The original Ergast API was deprecated in 2024. FastF1 now uses the jolpica-f1 API (`https://api.jolpi.ca/ergast/f1`) which maintains the same interface and data format.
+</Info>
+
+## Getting Started
+
+Import and initialize the Ergast interface:
+
+```python
+from fastf1.ergast import Ergast
+
+# Initialize with default settings
+ergast = Ergast()
+
+# Or customize the behavior
+ergast = Ergast(
+    result_type='pandas',  # 'pandas' or 'raw'
+    auto_cast=True,        # Automatic type conversion
+    limit=100              # Max results per request (default: 30, max: 1000)
+)
+```
+
+### Configuration Options
+
+- **`result_type`**: 
+  - `'pandas'`: Returns `ErgastSimpleResponse` or `ErgastMultiResponse` as DataFrames (default)
+  - `'raw'`: Returns `ErgastRawResponse` as JSON-like dict/list structures
+
+- **`auto_cast`**: When `True`, automatically converts string values to appropriate types (int, float, date)
+
+- **`limit`**: Maximum number of results per request. Default is 30, maximum is 1000.
+
+## Querying Race Data
+
+### Race Schedule
+
+Get the race calendar for a season:
+
+```python
+from fastf1.ergast import Ergast
+
+ergast = Ergast()
+
+# Get current season schedule
+schedule = ergast.get_race_schedule(season='current')
+print(schedule)
+
+# Get specific season
+schedule_2023 = ergast.get_race_schedule(season=2023)
+
+# Get specific race
+monaco_2023 = ergast.get_race_schedule(season=2023, round=6)
+```
+
+### Race Results
+
+Query race results for one or multiple races:
+
+```python
+# Get race results for entire season
+results = ergast.get_race_results(season=2022)
+
+# Results are returned as ErgastMultiResponse
+print(f"Total races: {len(results.content)}")
+
+# Access results for first race
+first_race_results = results.content[0]
+print(first_race_results)
+
+# Get race metadata
+race_info = results.description
+print(race_info)
+
+# Get results for specific race
+bahrain_2022 = ergast.get_race_results(season=2022, round=1)
+print(bahrain_2022.content[0])
+```
+
+### Qualifying Results
+
+```python
+# Get qualifying results
+quali_results = ergast.get_qualifying_results(season=2023, round=1)
+
+# Access the qualifying data
+for idx, quali in enumerate(quali_results.content):
+    race_name = quali_results.description.iloc[idx]['raceName']
+    print(f"\n{race_name} Qualifying:")
+    print(quali[['position', 'Driver', 'Constructor', 'Q1', 'Q2', 'Q3']].head())
+```
+
+### Sprint Results
+
+```python
+# Get sprint results for races that had sprints
+sprint_results = ergast.get_sprint_results(season=2023)
+
+for idx, sprint in enumerate(sprint_results.content):
+    race_name = sprint_results.description.iloc[idx]['raceName']
+    print(f"\n{race_name} Sprint:")
+    print(sprint[['position', 'Driver', 'points']].head())
+```
+
+## Driver and Constructor Data
+
+### Driver Information
+
+```python
+# Get all drivers from a season
+drivers_2023 = ergast.get_driver_info(season=2023)
+print(drivers_2023[['driverId', 'givenName', 'familyName', 'nationality']])
+
+# Get specific driver information
+hamilton = ergast.get_driver_info(driver='hamilton')
+print(hamilton)
+
+# Get all drivers who raced for a specific constructor
+ferrari_drivers = ergast.get_driver_info(constructor='ferrari', season=2023)
+print(ferrari_drivers)
+```
+
+### Constructor Information
+
+```python
+# Get all constructors from a season
+constructors = ergast.get_constructor_info(season=2023)
+print(constructors[['constructorId', 'name', 'nationality']])
+
+# Get specific constructor
+redbull = ergast.get_constructor_info(constructor='red_bull')
+print(redbull)
+
+# Get constructors a driver raced for
+verstappen_teams = ergast.get_constructor_info(driver='verstappen')
+print(verstappen_teams)
+```
+
+## Championship Standings
+
+### Driver Standings
+
+```python
+# Get current driver standings
+standings = ergast.get_driver_standings(season='current')
+print(standings.content[0][['position', 'Driver', 'points', 'wins']])
+
+# Get standings after specific race
+standings_r10 = ergast.get_driver_standings(season=2023, round=10)
+print(standings_r10.content[0])
+
+# Get historical championship winner
+champion_2010 = ergast.get_driver_standings(
+    season=2010, 
+    round='last',
+    standings_position=1
+)
+print(champion_2010.content[0])
+```
+
+### Constructor Standings
+
+```python
+# Get constructor championship standings
+const_standings = ergast.get_constructor_standings(season=2023)
+print(const_standings.content[0][['position', 'Constructor', 'points', 'wins']])
+
+# Get standings after specific race
+const_r5 = ergast.get_constructor_standings(season=2023, round=5)
+print(const_r5.content[0])
+```
+
+## Circuit Information
+
+```python
+# Get all circuits from a season
+circuits = ergast.get_circuits(season=2023)
+print(circuits[['circuitId', 'circuitName', 'locality', 'country']])
+
+# Get specific circuit information
+monza = ergast.get_circuits(circuit='monza')
+print(monza)
+
+# Get circuits used in a specific season
+circuits_1980 = ergast.get_circuits(season=1980)
+print(circuits_1980)
+```
+
+## Advanced Filtering
+
+Combine multiple filters for precise queries:
+
+```python
+# Get all pole positions for a driver
+poles = ergast.get_qualifying_results(
+    driver='hamilton',
+    results_position=1  # P1 in qualifying
+)
+print(f"Hamilton has {len(poles.content)} pole positions")
+
+# Get all wins for a driver at a specific circuit
+monaco_wins = ergast.get_race_results(
+    driver='senna',
+    circuit='monaco',
+    results_position=1
+)
+print(f"Senna wins at Monaco: {len(monaco_wins.content)}")
+
+# Get races where a driver started from a specific grid position
+grid_wins = ergast.get_race_results(
+    driver='verstappen',
+    grid_position=1,
+    results_position=1
+)
+print(f"Verstappen wins from pole: {len(grid_wins.content)}")
+
+# Get fastest laps for a driver
+fastest_laps = ergast.get_race_results(
+    driver='bottas',
+    fastest_rank=1
+)
+print(f"Bottas fastest laps: {len(fastest_laps.content)}")
+```
+
+## Pagination
+
+Handle large result sets with pagination:
+
+```python
+# Query with custom limit
+ergast = Ergast(limit=50)
+results = ergast.get_race_results(season=2022)
+
+# Check if response is complete
+print(f"Is complete: {results.is_complete}")
+print(f"Total results: {results.total_results}")
+
+# Get next page of results
+if not results.is_complete:
+    next_page = results.get_next_result_page()
+    print(next_page.content[0])
+
+# Get previous page
+if results.total_results > 0:
+    prev_page = results.get_prev_result_page()
+    print(prev_page.content[0])
+
+# Get all results by increasing limit
+ergast_unlimited = Ergast(limit=1000)
+all_results = ergast_unlimited.get_race_results(season=2022)
+```
+
+## Working with Response Objects
+
+### ErgastSimpleResponse
+
+Single DataFrame response:
+
+```python
+seasons = ergast.get_seasons()
+
+# It's a DataFrame
+print(type(seasons))  # ErgastSimpleResponse (extends DataFrame)
+
+# Use all Pandas operations
+print(seasons.head())
+print(seasons['season'].unique())
+recent_seasons = seasons[seasons['season'] >= 2020]
+```
+
+### ErgastMultiResponse
+
+Multiple DataFrames with description:
+
+```python
+results = ergast.get_race_results(season=2023, limit=5)
+
+# Description contains race metadata
+print(results.description)
+# Columns: season, round, raceName, date, time, etc.
+
+# Content contains list of result DataFrames
+print(len(results.content))  # Number of races
+
+# Each element is a DataFrame with race results
+for idx, race_results in enumerate(results.content):
+    race_name = results.description.iloc[idx]['raceName']
+    winner = race_results.iloc[0]['Driver']
+    print(f"{race_name}: Winner - {winner}")
+```
+
+## Combining with FastF1
+
+Use Ergast for historical context with FastF1 telemetry:
+
+```python
+import fastf1
+from fastf1.ergast import Ergast
+
+ergast = Ergast()
+
+# Get historical championship battle
+standings_2021 = ergast.get_driver_standings(season=2021, round='last')
+top_2 = standings_2021.content[0].head(2)
+print("2021 Final Standings:")
+print(top_2[['position', 'Driver', 'points']])
+
+# Now analyze the deciding race with FastF1
+finale = fastf1.get_session(2021, 'Abu Dhabi', 'R')
+finale.load()
+
+ver_laps = finale.laps.pick_drivers('VER')
+ham_laps = finale.laps.pick_drivers('HAM')
+
+print(f"\nVerstappen average pace: {ver_laps['LapTime'].mean()}")
+print(f"Hamilton average pace: {ham_laps['LapTime'].mean()}")
+```
+
+## Available Endpoints
+
+The Ergast interface provides these methods:
+
+| Method | Description |
+|--------|-------------|
+| `get_seasons()` | List of seasons |
+| `get_race_schedule()` | Race calendar/schedule |
+| `get_race_results()` | Race finishing results |
+| `get_qualifying_results()` | Qualifying session results |
+| `get_sprint_results()` | Sprint race results |
+| `get_driver_info()` | Driver information |
+| `get_constructor_info()` | Constructor/team information |
+| `get_circuits()` | Circuit information |
+| `get_driver_standings()` | Driver championship standings |
+| `get_constructor_standings()` | Constructor championship standings |
+| `get_finishing_status()` | Finishing status codes |
+| `get_lap_times()` | Lap time data |
+| `get_pit_stops()` | Pit stop data |
+
+## Error Handling
+
+```python
+from fastf1 import exceptions
+
+try:
+    results = ergast.get_race_results(season=2030)  # Future season
+except exceptions.ErgastInvalidRequestError as e:
+    print(f"Invalid request: {e}")
+except exceptions.ErgastJsonError as e:
+    print(f"JSON parsing error: {e}")
+```
+
+## Best Practices
+
+1. **Use appropriate limits** - Default is 30, increase to 100-1000 for comprehensive queries
+2. **Cache results** - Ergast data is historical and doesn't change frequently
+3. **Combine filters** - Use multiple parameters to reduce result set size
+4. **Check pagination** - Use `is_complete` property to ensure you have all results
+5. **Use `auto_cast=True`** - Automatic type conversion makes data easier to work with
+
+## Next Steps
+
+- Learn about [data analysis techniques](/guides/data-analysis) for processing Ergast data
+- Explore [visualization](/guides/visualization) for creating charts with historical data
+- See the [API Reference](/api/ergast) for complete Ergast documentation

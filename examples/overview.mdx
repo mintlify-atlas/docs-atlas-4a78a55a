@@ -1,0 +1,106 @@
+---
+title: Examples Overview
+description: Gallery of FastF1 examples demonstrating various analysis capabilities
+---
+
+This section provides a comprehensive collection of examples demonstrating the capabilities of FastF1 for Formula 1 data analysis. Each example uses real-world data and provides complete, runnable code.
+
+## Example Categories
+
+### Telemetry Analysis
+
+Analyze driver telemetry data including speed traces, GPS positions, and gear shifts.
+
+<CardGroup cols={2}>
+  <Card title="Speed Traces" icon="gauge-high" href="/examples/telemetry-analysis#speed-traces">
+    Compare driver speed traces across laps
+  </Card>
+  <Card title="Track Maps" icon="map" href="/examples/telemetry-analysis#speed-visualization-on-track">
+    Visualize speed and gear shifts on circuit maps
+  </Card>
+  <Card title="Corner Analysis" icon="turn-down-right" href="/examples/telemetry-analysis#corner-annotations">
+    Annotate speed traces with corner information
+  </Card>
+  <Card title="Gear Shifts" icon="gears" href="/examples/telemetry-analysis#gear-shifts">
+    Track gear usage throughout the circuit
+  </Card>
+</CardGroup>
+
+### Lap Time Comparison
+
+Compare lap times between drivers and analyze performance distributions.
+
+<CardGroup cols={2}>
+  <Card title="Driver Lap Times" icon="clock" href="/examples/lap-time-comparison#driver-lap-times">
+    Scatter plot of lap times with tire compound colors
+  </Card>
+  <Card title="Lap Time Distribution" icon="chart-simple" href="/examples/lap-time-comparison#lap-time-distributions">
+    Violin plots showing performance distributions
+  </Card>
+</CardGroup>
+
+### Race Strategy
+
+Analyze race strategies including tire choices, pit stops, and position changes.
+
+<CardGroup cols={2}>
+  <Card title="Tire Strategy" icon="circle-dot" href="/examples/race-strategy#tire-strategy">
+    Visualize tire compound strategies for all drivers
+  </Card>
+  <Card title="Position Changes" icon="arrows-up-down" href="/examples/race-strategy#position-changes">
+    Track position changes throughout the race
+  </Card>
+  <Card title="Qualifying Results" icon="flag-checkered" href="/examples/race-strategy#qualifying-results">
+    Visualize qualifying performance gaps
+  </Card>
+  <Card title="Team Pace Ranking" icon="ranking-star" href="/examples/race-strategy#team-pace-ranking">
+    Compare team race pace distributions
+  </Card>
+</CardGroup>
+
+### Championship Standings
+
+Track championship progress and analyze season-long performance.
+
+<CardGroup cols={2}>
+  <Card title="Results Tracker" icon="table" href="/examples/driver-standings#results-tracker">
+    Heatmap of points scored at each race
+  </Card>
+  <Card title="Season Summary" icon="trophy" href="/examples/driver-standings#season-summary">
+    Interactive dashboard of season performance
+  </Card>
+  <Card title="Championship Calculator" icon="calculator" href="/examples/driver-standings#championship-calculator">
+    Calculate who can still win the championship
+  </Card>
+</CardGroup>
+
+## Getting Started
+
+All examples require FastF1 to be installed:
+
+```bash
+pip install fastf1
+```
+
+Some examples also require additional visualization libraries:
+
+```bash
+pip install matplotlib seaborn plotly
+```
+
+## Running the Examples
+
+Each example is self-contained and can be run directly. Simply copy the code and execute it in your Python environment. The examples will:
+
+1. Load the required session data
+2. Process and prepare the data
+3. Create visualizations
+4. Display the results
+
+<Note>
+  The first time you run an example, FastF1 will download and cache the required data. Subsequent runs will be faster.
+</Note>
+
+## Source Code
+
+All examples are available in the [FastF1 repository](https://github.com/theOehrly/Fast-F1/tree/master/examples) and are regularly updated to use the latest API features.

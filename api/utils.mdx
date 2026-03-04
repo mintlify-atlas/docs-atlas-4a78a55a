@@ -1,0 +1,185 @@
+---
+title: 'Utilities'
+description: 'Utility functions for time conversions, delta calculations, and data manipulation'
+---
+
+## Overview
+
+The `fastf1.utils` module provides utility functions for common operations in FastF1, including time conversions, delta time calculations, and recursive dictionary access.
+
+## Functions
+
+### to_timedelta()
+
+```python
+fastf1.utils.to_timedelta(x)
+```
+
+Fast timedelta object creation from a time string.
+
+**Parameters:**
+- `x` (str | datetime.timedelta): Timestamp string or timedelta object
+
+**Returns:**
+- `datetime.timedelta | None`: Parsed timedelta object or None if parsing fails
+
+**Permissible String Formats:**
+
+For example: `13:24:46.320215` with:
+- Optional hours and minutes
+- Optional microseconds and milliseconds with arbitrary precision (1 to 6 digits)
+
+**Examples of valid formats:**
+- `24.3564` - seconds + milli/microseconds
+- `36:54` - minutes + seconds
+- `8:45:46` - hours, minutes, seconds
+
+**Example:**
+```python
+import fastf1.utils as utils
+
+# Parse a lap time
+lap_time = utils.to_timedelta("1:23.456")
+print(lap_time)  # 0:01:23.456000
+
+# Parse seconds only
+sector_time = utils.to_timedelta("28.345")
+print(sector_time)  # 0:00:28.345000
+```
+
+### to_datetime()
+
+```python
+fastf1.utils.to_datetime(x)
+```
+
+Fast datetime object creation from a date string.
+
+**Parameters:**
+- `x` (str | datetime.datetime): Timestamp string or datetime object
+
+**Returns:**
+- `datetime.datetime | None`: Parsed datetime object or None if parsing fails
+
+**Permissible String Formats:**
+
+For example: `2020-12-13T13:27:15.320000Z` with:
+- Optional milliseconds and microseconds with arbitrary precision (1 to 6 digits)
+- Optional trailing letter 'Z'
+
+**Examples of valid formats:**
+- `2020-12-13T13:27:15.320000`
+- `2020-12-13T13:27:15.32Z`
+- `2020-12-13T13:27:15`
+
+**Example:**
+```python
+import fastf1.utils as utils
+
+# Parse session timestamp
+session_time = utils.to_datetime("2023-03-05T15:30:00Z")
+print(session_time)  # 2023-03-05 15:30:00
+
+# Parse with microseconds
+precise_time = utils.to_datetime("2023-03-05T15:30:00.123456")
+print(precise_time)  # 2023-03-05 15:30:00.123456
+```
+
+### delta_time()
+
+```python
+fastf1.utils.delta_time(reference_lap, compare_lap)
+```
+
+<Warning>
+  This function is deprecated since version 3.0.0 and may be modified or removed in a future release due to accuracy concerns.
+</Warning>
+
+<Warning>
+  This function has a tendency to give inaccurate results. Always verify the result against sector time differences.
+</Warning>
+
+Calculates the delta time of a given lap, along the 'Distance' axis of the reference lap.
+
+**Parameters:**
+- `reference_lap` (fastf1.core.Lap): The lap taken as reference
+- `compare_lap` (fastf1.core.Lap): The lap to compare
+
+**Returns:**
+- `tuple[pd.Series, fastf1.core.Telemetry, fastf1.core.Telemetry]`: A tuple containing:
+  - `pd.Series` of type `float64` with the delta in seconds
+  - Telemetry for the reference lap
+  - Telemetry for the comparison lap
+
+<Note>
+  Use the returned telemetry for plotting to ensure you have telemetry data that was created with the same interpolation and resampling options.
+</Note>
+
+**Example:**
+```python
+import fastf1 as ff1
+from fastf1 import plotting, utils
+from matplotlib import pyplot as plt
+
+plotting.setup_mpl(color_scheme='fastf1')
+
+session = ff1.get_session(2021, 'Emilia Romagna', 'Q')
+session.load()
+lec = session.laps.pick_drivers('LEC').pick_fastest()
+ham = session.laps.pick_drivers('HAM').pick_fastest()
+
+delta_time, ref_tel, compare_tel = utils.delta_time(ham, lec)
+
+fig, ax = plt.subplots()
+ax.plot(ref_tel['Distance'], ref_tel['Speed'],
+        color=plotting.get_team_color(ham['Team'], session))
+ax.plot(compare_tel['Distance'], compare_tel['Speed'],
+        color=plotting.get_team_color(lec['Team'], session))
+
+twin = ax.twinx()
+twin.plot(ref_tel['Distance'], delta_time, '--', color='white')
+twin.set_ylabel("<-- Lec ahead | Ham ahead -->")
+plt.show()
+```
+
+### recursive_dict_get()
+
+```python
+fastf1.utils.recursive_dict_get(d, *keys, default_none=False)
+```
+
+Recursive dict get. Can take an arbitrary number of keys and returns an empty dict if any key does not exist.
+
+**Parameters:**
+- `d` (dict): The dictionary to traverse
+- `*keys` (str): Variable number of keys to traverse
+- `default_none` (bool, optional): If True, return None instead of empty dict when key doesn't exist. Default is False.
+
+**Returns:**
+- The value at the nested key path, or `{}` (or `None` if `default_none=True`) if any key doesn't exist
+
+**Example:**
+```python
+from fastf1.utils import recursive_dict_get
+
+data = {
+    'session': {
+        'weather': {
+            'temperature': 25,
+            'humidity': 60
+        }
+    }
+}
+
+# Get nested value
+temp = recursive_dict_get(data, 'session', 'weather', 'temperature')
+print(temp)  # 25
+
+# Missing key returns empty dict
+missing = recursive_dict_get(data, 'session', 'track', 'length')
+print(missing)  # {}
+
+# Or return None instead
+missing = recursive_dict_get(data, 'session', 'track', 'length', default_none=True)
+print(missing)  # None
+```
