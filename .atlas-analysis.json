@@ -1,0 +1,124 @@
+{
+  "projectType": "sdk-library",
+  "projectName": "FastF1",
+  "projectDescription": "Python package for accessing and analyzing Formula 1 results, schedules, timing data and telemetry",
+  "theme": "aspen",
+  "primaryColor": "#e35229",
+  "lightColor": "#109654",
+  "darkColor": "#748294",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "core-concepts/sessions-and-events",
+              "core-concepts/loading-data",
+              "core-concepts/telemetry",
+              "core-concepts/lap-timing",
+              "core-concepts/caching"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/data-analysis",
+              "guides/visualization",
+              "guides/ergast-api",
+              "guides/live-timing",
+              "guides/performance-optimization"
+            ]
+          },
+          {
+            "group": "Examples",
+            "pages": [
+              "examples/overview",
+              "examples/telemetry-analysis",
+              "examples/lap-time-comparison",
+              "examples/race-strategy",
+              "examples/driver-standings"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Core API",
+            "pages": [
+              "api/events",
+              "api/session",
+              "api/laps",
+              "api/telemetry",
+              "api/results"
+            ]
+          },
+          {
+            "group": "Data Access",
+            "pages": [
+              "api/ergast",
+              "api/cache",
+              "api/livetiming"
+            ]
+          },
+          {
+            "group": "Visualization",
+            "pages": [
+              "api/plotting"
+            ]
+          },
+          {
+            "group": "Utilities",
+            "pages": [
+              "api/utils",
+              "api/exceptions",
+              "api/logging"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Access to F1 timing data, telemetry, and session results",
+    "Integration with Ergast-compatible jolpica-f1 API for historical data",
+    "Extended Pandas DataFrames with F1-specific functions",
+    "Matplotlib integration for data visualization",
+    "Built-in caching for improved performance",
+    "Real-time live timing data support"
+  ],
+  "publicApiSurface": [
+    "fastf1.get_session()",
+    "fastf1.get_event()",
+    "fastf1.get_event_schedule()",
+    "fastf1.get_testing_session()",
+    "fastf1.Cache",
+    "Session.load()",
+    "Session.laps",
+    "Session.results",
+    "Session.car_data",
+    "Session.pos_data",
+    "Session.weather_data",
+    "Laps.pick_driver()",
+    "Laps.pick_fastest()",
+    "Laps.get_telemetry()",
+    "Telemetry.add_distance()",
+    "Telemetry.add_differential_distance()",
+    "Telemetry.slice_by_lap()",
+    "fastf1.plotting.setup_mpl()",
+    "fastf1.plotting.get_driver_color()",
+    "fastf1.plotting.get_team_color()",
+    "fastf1.ergast.Ergast"
+  ]
+}
